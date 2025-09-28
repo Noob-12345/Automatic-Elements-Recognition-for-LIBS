@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 #数据导入
-data = pd.read_excel(r'E:\工作文件\课题组激光诱导击穿光谱学习\LIBS-ElementRecogonise\Code\Elements_database\CrI.xlsx',header=1)
+data = pd.read_excel(r'D:\LIBS\ElementDetectation\LIBS-ElementRecogonise\Code\Elements_database\CuI.xlsx',header=1)
 data=data.to_numpy()
 even_rows = data[1::2]
 
