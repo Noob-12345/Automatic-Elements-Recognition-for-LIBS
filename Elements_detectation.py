@@ -8,6 +8,7 @@ import glob
 import os
 import pywt
 import matplotlib.pyplot as plt
+from collections import defaultdict
 from Wavelet_peakfinding import find_peaks1,find_peaks_ridge,peak_correction,wavelet_peak_detection #寻峰
 
 #-----预备-----
@@ -21,7 +22,7 @@ data = data.fillna(0).to_numpy()
 data = np.nan_to_num(data, nan=0.0)
 x = data[:, 0]
 intensity_sum=data[:,1]
-signal=data[:,2]
+signal=data[:,1]
 intensity_ionized=data[:,3]
 
 
@@ -81,64 +82,183 @@ true_peak_idx, peak_wl, peak_int = wavelet_peak_detection(signal,x,wavelet='mexh
                            neighbor=4, min_length=3, coeffi_threshold=1000, window=5)#峰值校正
 
 
-#-----置信度设置-----
+#-----相似度设置-----
 #方案1：波长+强度归一化设置权重
-match_results = {}#最终元素置信度存储
-for element_name, element_data in elements.items():
-    # element_data["data"] 是一个二维矩阵 [波长, 模拟强度]
-    element_matrix = element_data["data"]
-    element_wl = element_matrix[:, 0]
-    element_intensity = element_matrix[:, 1]
-    # 这里可以做你想要的对比，比如找落在峰值波长范围内的谱线
+def compute_element_confidence(elements, peak_wl):
+    match_results = {}#最终元素置信度存储
+    element_distance = defaultdict(list)  # 存储每个元素的多个粒子的distance
+    for element_name, element_data in elements.items():
+        # element_data["data"] 是一个二维矩阵 [波长, 模拟强度]
+        element_matrix = element_data["data"]
+        element_wl = element_matrix[:, 0]
+        element_intensity = element_matrix[:, 1]
+        # 这里可以做你想要的对比，比如找落在峰值波长范围内的谱线
 
-    # 波长匹配！！待完善
-    wl_min = peak_wl.min()
-    wl_max = peak_wl.max()
-    mask = (element_wl >= wl_min) & (element_wl <= wl_max)
-    matched_wl = element_wl[mask]
-    matched_intensity = element_intensity[mask]
-    #matched是元素库内落在峰值范围内的谱线
-    rel_intensity_sum=np.sum(matched_intensity)
+        # 波长匹配！！待完善
+        wl_min = peak_wl.min()
+        wl_max = peak_wl.max()
+        mask = (element_wl >= wl_min) & (element_wl <= wl_max)
+        matched_wl = element_wl[mask]
+        matched_intensity = element_intensity[mask]
+        #matched是元素库内落在峰值范围内的谱线
+        rel_intensity_sum=np.sum(matched_intensity)
 
-    O_distance=0
-    for sim_wl, sim_int in zip(matched_wl, matched_intensity):
-        # 找到实际峰值中最接近的波长
-        idx = np.argmin(np.abs(peak_wl - sim_wl))
-        closest_peak = peak_wl[idx]
-        # if element_name=='LiII':
-        #     print(sim_wl,closest_peak)
-        O_distance+= sim_int*((sim_wl - closest_peak)**2)/rel_intensity_sum # 欧几里得距离
-        # if element_name=='CuII':
-        #     print(O_distance)
+        O_distance=0
+        for sim_wl, sim_int in zip(matched_wl, matched_intensity):
+            # 找到实际峰值中最接近的波长
+            idx = np.argmin(np.abs(peak_wl - sim_wl))
+            closest_peak = peak_wl[idx]
+            # if element_name=='LiII':
+            #     print(sim_wl,closest_peak)
+            O_distance+= sim_int*((sim_wl - closest_peak)**2)/rel_intensity_sum # 欧几里得距离
+            # if element_name=='CuII':
+            #     print(O_distance)
 
-    if O_distance==0:
-        O_distance=1e+4 #大值防止出现全部特征谱线都不在峰值范围内的情况
+        if O_distance==0:
+            O_distance=1e+4 #大值防止出现全部特征谱线都不在峰值范围内的情况
 
-    # 存入字典
-    match_results[element_name] = O_distance
+        # 存入字典
+        match_results[element_name] = O_distance
+        base_elem = ''.join([c for c in element_name if not c.isdigit() and c not in ["I","V"]])
+        element_distance[base_elem].append(O_distance)#元素种类分类的欧几里得距离
+        
 
-# 打印排序后结果
-for elem, distance in sorted(match_results.items(), key=lambda x: x[1]):
-    print(f"{elem}: 距离(O_distance) = {distance:.4f}")
+    # 打印排序后结果
+    #粒子
+    for elem, distance in sorted(match_results.items(), key=lambda x: x[1]):
+        print(f"{elem}: 距离(O_distance) = {distance:.4f}")
+    #元素
+    for elem, distances in sorted(element_distance.items(), key=lambda x: np.mean(x[1])):
+        avg_distance = np.sum(distances)
+        print(f"{elem}: 距离(O_distance) = {avg_distance:.4f}")
 
-
-#debug
-target_element = "LiII"   # 想要高亮的元素
-target_element2="NaII"
-
-for elem in elements_list:
-    if elem == target_element:  
-        plt.scatter(elements[elem]['data'][:,0], elements[elem]['data'][:,1], 
-                    s=10, color='blue', label=f"{elem} (target)")  
-    elif elem == target_element2:  
-        plt.scatter(elements[elem]['data'][:,0], elements[elem]['data'][:,1], 
-                    s=10, color='orange', label=f"{elem} (target)")
-    else:
-        plt.scatter(elements[elem]['data'][:,0], elements[elem]['data'][:,1], 
-                    s=2, color='green')
+    return match_results
+# a=compute_element_confidence(elements, peak_wl)
 
 
-plt.plot(x, signal)
-plt.scatter(peak_wl, peak_int, color='red')
-plt.show()
+#方案二：谱线形状相似度
+#遍历每一个元素，在elements_database中提取出谱线的波长并且对应到寻峰结果peak_wl中寻找
+#scope为1nm的最近峰，如果超出1nm那很可能是寻峰问题，则舍弃掉该谱线
+#将每个元素提出出来的所有谱线与实际峰值进行对比，计算欧几里得距离
+def compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.5):
+    """
+    方案二：用理论和实验谱形的欧几里得距离作为相似度
+    elements: 元素数据库 { "ElemI": {"data": [wl, intensity]} }
+    peak_wl: 实验寻峰得到的峰位
+    peak_int: 实验寻峰得到的峰强度
+    scope: 容许匹配窗口 (nm),默认1nm
+    """
+    match_results = {}
+    element_distance = defaultdict(list)
+
+    #遍历每一个元素
+    for element_name, element_data in elements.items():
+        element_matrix = element_data["data"]
+        element_wl = element_matrix[:, 0]
+        element_intensity = element_matrix[:, 1]
+
+        theo_vec = []
+        exp_vec = []
+        matched_theo = []  # 保存匹配成功的理论谱线
+        matched_exp = []   # 保存匹配成功的实验谱线
+
+        for sim_wl, sim_int in zip(element_wl, element_intensity):
+            # 找到最接近的实验峰
+            idx = np.argmin(np.abs(peak_wl - sim_wl))
+            diff = abs(peak_wl[idx] - sim_wl)
+            if diff <= scope:
+                # 匹配成功
+                theo_vec.append(sim_int)
+                exp_vec.append(peak_int[idx])
+                matched_theo.append((sim_wl, sim_int))
+                matched_exp.append((peak_wl[idx], peak_int[idx]))
+            else:
+                # 匹配失败：理论有谱线，实验没有 → 实验强度记为0 （匹配失败策略待完善）
+                theo_vec.append(sim_int)#（可以设置为0或者是平均值什么的）
+                exp_vec.append(0)
+
+        if len(theo_vec) == 0: #（极端情况，无匹配峰）
+            O_distance = 1e4
+        else:
+            theo_vec = np.array(theo_vec)
+            exp_vec = np.array(exp_vec)
+
+            # 归一化
+            if np.sum(theo_vec) > 0:
+                theo_vec = theo_vec / np.linalg.norm(theo_vec)
+            if np.sum(exp_vec) > 0:
+                exp_vec = exp_vec / np.linalg.norm(exp_vec)
+
+            O_distance = np.sqrt(np.sum((theo_vec - exp_vec) ** 2))
+
+        match_results[element_name] = O_distance
+        base_elem = ''.join([c for c in element_name if not c.isdigit() and c not in ["I","V"]])
+        element_distance[base_elem].append(O_distance)
+        if element_name == 'AlI':
+            plt.figure(figsize=(8,4))
+
+            # 理论匹配谱线（蓝色竖线）
+            for wl, inten in matched_theo:
+                plt.vlines(wl, 0, inten/np.max([i for _,i in matched_theo]), 
+                        color='b', alpha=0.7, label='Theoretical' if wl==matched_theo[0][0] else "")
+
+            # 实验匹配谱线（红色竖线）
+            for wl, inten in matched_exp:
+                plt.vlines(wl, 0, inten/np.max([i for _,i in matched_exp]), 
+                        color='r', alpha=0.7, label='Experimental' if wl==matched_exp[0][0] else "")
+
+            plt.title(f'Matched Stick Spectrum for {element_name}')
+            plt.xlabel('Wavelength (nm)')
+            plt.ylabel('Normalized Intensity')
+            plt.legend()
+            plt.show()
+    # 粒子
+    # print("\n--- 粒子层面 ---")
+    # for elem, distance in sorted(match_results.items(), key=lambda x: x[1]):
+    #     print(f"{elem}: 距离(O_distance) = {distance:.4f}")
+
+    # 元素
+    print("\n--- 元素层面 ---")
+    for elem, distances in sorted(element_distance.items(), key=lambda x: np.mean(x[1])):
+        avg_distance = np.mean(distances)
+        print(f"{elem}: 平均距离(O_distance) = {avg_distance:.4f}")
+
+    return match_results
+b=compute_element_confidence_shape(elements, peak_wl, peak_int, scope=1.0)
+
+# #debug
+# target_element = "CrII"   # 想要高亮的元素
+# target_element2="NaII"
+
+# for elem in elements_list:
+#     if elem == target_element:  
+#         plt.scatter(elements[elem]['data'][:,0], elements[elem]['data'][:,1], 
+#                     s=10, color='blue', label=f"{elem} (target)")  
+#     elif elem == target_element2:  
+#         plt.scatter(elements[elem]['data'][:,0], elements[elem]['data'][:,1], 
+#                     s=10, color='orange', label=f"{elem} (target)")
+#     else:
+#         plt.scatter(elements[elem]['data'][:,0], elements[elem]['data'][:,1], 
+#                     s=2, color='green')
+
+
+
+#-----置信度设置-----
+#方案一：整体相似度反比归一化   (1/distance)/sum(1/distance)
+# distance_sum=0
+# for distance in sorted(a.values()):
+#     distance_sum+=1/distance
+
+# for elem, distance in sorted(a.items(), key=lambda x: x[1]):
+#     confidence=(1/distance)/distance_sum
+#     print(f"{elem}: 置信度 = {confidence:.4f}")
+
+
+
+
+
+
+# plt.plot(x, signal)
+# plt.scatter(peak_wl, peak_int, color='red')
+# plt.show()
 

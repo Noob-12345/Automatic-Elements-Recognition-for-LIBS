@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 #数据导入
-data = pd.read_excel(r'D:\LIBS\ElementDetectation\LIBS-ElementRecogonise\Code\Elements_database\CuI.xlsx',header=1)
+data = pd.read_csv(r'D:\LIBS\ElementDetectation\LIBS-ElementRecogonise\Code\Elements_database\CrII.csv',header=1,skipinitialspace=True)
 data=data.to_numpy()
 even_rows = data[1::2]
 
