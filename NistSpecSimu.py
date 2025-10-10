@@ -1,17 +1,74 @@
 #本文件用于Nist谱线模拟
-
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import glob
+import os   
 
-data=pd.read_csv(r'D:\LIBS\ElementDetectation\LIBS-ElementRecogonise\Code\SpecSimuDatabase\Cr100_10000K.csv',header=0)
+
+folder_path = r'E:\工作文件\课题组激光诱导击穿光谱学习\LIBS-ElementRecogonise\Latest\Elements_database' #元素库路径
+data=pd.read_csv(r'E:\工作文件\课题组激光诱导击穿光谱学习\LIBS-ElementRecogonise\Latest\SpecSimuDatabase\Li100_10000K.csv',header=0)
 data=data.to_numpy()
 wl=data[:,0]
 intensity_sum=data[:,1]
 intensity_atom=data[:,2]
 intensity_ion=data[:,3]
+#-----预备-----
+#参数设置
+T=10000 
+kB=8.617330350e-5 #eV/K
 
-print(intensity_atom[200])
+
+#----必备函数定义----
+#计算U（T） 返回U和U总和
+def U_Calculate(g,E):
+    U=np.zeros(len(g))
+    for i in range(len(g)):
+        U[i]=g[i]*np.exp(-E[i]/(kB*T))
+    return U,np.sum(U)
+
+#计算相对强度 返回相对强度
+def rel_intensity(wl,A,E,g):
+    U_T,U_T_sum=U_Calculate(g,E)
+    rel_intensity=np.zeros(len(wl))
+    for i in range(len(wl)):
+        rel_intensity[i]=(A[i]*g[i]*np.exp(-E[i]/(kB*T)))/U_T_sum
+    return rel_intensity
+
+#元素库制作 返回elements字典和elements_list元素列表
+def elements_database(folder_path):
+    folder_path = r'E:\工作文件\课题组激光诱导击穿光谱学习\LIBS-ElementRecogonise\Latest\Elements_database' #元素库路径
+    # 获取所有Excel文件路径
+    file_list = glob.glob(os.path.join(folder_path, "*.csv"))
+    # 获取元素名字（去掉路径和后缀）
+    elements_list = [os.path.splitext(os.path.basename(f))[0] for f in file_list]
+    #元素特征光谱制作
+    elements={}
+    for element_name in elements_list: 
+        dfs = []
+        file_path = os.path.join(folder_path, element_name + ".csv")  # 拼接完整路径
+        df = pd.read_csv(file_path,header=1,encoding="gbk")  # 读取该元素的csv
+        df=df.to_numpy()
+        even_rows = df[1::2]
+        wl=even_rows[:,1]*0.1
+        A=even_rows[:,2]
+        E=even_rows[:,3]*1.2398*10**(-4) #eV
+        g=even_rows[:,7]
+    #波段过滤 200-900nm
+        mask = (wl >= 200) & (wl <= 900)
+        wl = wl[mask]
+        A = A[mask]
+        E = E[mask]
+        g = g[mask]
+        
+        relative_intensity=rel_intensity(wl,A,E,g)
+        matrix = np.column_stack((wl, relative_intensity))
+        elements[element_name] = { "data": matrix}
+    return elements,elements_list
+
+
+#-----主程序-----
+elements,elements_list=elements_database(folder_path)
 
 plt.plot(wl,intensity_atom)
 plt.xlabel('Wavelength (nm)')

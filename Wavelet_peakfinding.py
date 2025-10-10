@@ -20,7 +20,7 @@ import pywt
 # signal=test_data[8500:10591,5]
 
 
-data=pd.read_csv(r'D:\LIBS\ElementDetectation\LIBS-ElementRecogonise\Code\SpecSimuDatabase\Cr100_10000K.csv',header=0,skipinitialspace=True)
+data=pd.read_csv(r'E:\工作文件\课题组激光诱导击穿光谱学习\LIBS-ElementRecogonise\Latest\SpecSimuDatabase\Li100_10000K.csv',header=0,skipinitialspace=True)
 data = data.fillna(0).to_numpy()
 data = np.nan_to_num(data, nan=0.0)
 
@@ -243,7 +243,8 @@ true_peak_idx, true_peak_wl, true_peak_int = peak_correction(ridges_found, x, si
 
 
 
-#脊线寻峰结果显示
+
+# #脊线寻峰结果显示
 # fig, (ax1, ax2, ax3) = plt.subplots(3, 1, sharex=True, figsize=(8, 6))
 
 # # 原始信号1

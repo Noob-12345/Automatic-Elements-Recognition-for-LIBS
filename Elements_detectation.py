@@ -16,8 +16,8 @@ from Wavelet_peakfinding import find_peaks1,find_peaks_ridge,peak_correction,wav
 T=10000 
 kB=8.617330350e-5 #eV/K
 #-----数据导入-----
-folder_path = r'D:\LIBS\ElementDetectation\LIBS-ElementRecogonise\Code\Elements_database' #元素库路径
-data=pd.read_csv(r'D:\LIBS\ElementDetectation\LIBS-ElementRecogonise\Code\SpecSimuDatabase\Cr100_10000K.csv',header=0,skipinitialspace=True)#待测光谱路径
+folder_path = r'E:\工作文件\课题组激光诱导击穿光谱学习\LIBS-ElementRecogonise\Latest\Elements_database' #元素库路径
+data=pd.read_csv(r'E:\工作文件\课题组激光诱导击穿光谱学习\LIBS-ElementRecogonise\Latest\SpecSimuDatabase\Li100_10000K.csv',header=0,skipinitialspace=True)#待测光谱路径
 data = data.fillna(0).to_numpy()
 data = np.nan_to_num(data, nan=0.0)
 x = data[:, 0]
@@ -45,7 +45,7 @@ def rel_intensity(wl,A,E,g):
 
 #元素库制作 返回elements字典和elements_list元素列表
 def elements_database(folder_path):
-    folder_path = r'D:\LIBS\ElementDetectation\LIBS-ElementRecogonise\Code\Elements_database' #元素库路径
+    folder_path = r'E:\工作文件\课题组激光诱导击穿光谱学习\LIBS-ElementRecogonise\Latest\Elements_database' #元素库路径
     # 获取所有Excel文件路径
     file_list = glob.glob(os.path.join(folder_path, "*.csv"))
     # 获取元素名字（去掉路径和后缀）
@@ -140,7 +140,8 @@ def compute_element_confidence(elements, peak_wl):
 #遍历每一个元素，在elements_database中提取出谱线的波长并且对应到寻峰结果peak_wl中寻找
 #scope为1nm的最近峰，如果超出1nm那很可能是寻峰问题，则舍弃掉该谱线
 #将每个元素提出出来的所有谱线与实际峰值进行对比，计算欧几里得距离
-def compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.5):
+
+def compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.25):
     """
     方案二：用理论和实验谱形的欧几里得距离作为相似度
     elements: 元素数据库 { "ElemI": {"data": [wl, intensity]} }
@@ -148,6 +149,7 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.5):
     peak_int: 实验寻峰得到的峰强度
     scope: 容许匹配窗口 (nm),默认1nm
     """
+
     match_results = {}
     element_distance = defaultdict(list)
 
@@ -156,75 +158,111 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.5):
         element_matrix = element_data["data"]
         element_wl = element_matrix[:, 0]
         element_intensity = element_matrix[:, 1]
-
-        theo_vec = []
+        #强度（计算O_distance 用）
+        theo_vec = [] 
         exp_vec = []
+        # 匹配成功的谱线（波长+强度）(绘图用)
         matched_theo = []  # 保存匹配成功的理论谱线
         matched_exp = []   # 保存匹配成功的实验谱线
 
+        # 初始化实验峰匹配标记
+        matched_flag = np.zeros(len(peak_wl), dtype=bool)
+
         for sim_wl, sim_int in zip(element_wl, element_intensity):
             # 找到最接近的实验峰
-            idx = np.argmin(np.abs(peak_wl - sim_wl))
-            diff = abs(peak_wl[idx] - sim_wl)
+            available_idx = np.where(~matched_flag)[0]
+            if len(available_idx) == 0:
+                theo_vec.append(sim_int)
+                exp_vec.append(0)
+                continue
+
+
+            nearest_idx = available_idx[np.argmin(np.abs(peak_wl[available_idx] - sim_wl))]
+            diff = abs(peak_wl[nearest_idx] - sim_wl)
+
             if diff <= scope:
                 # 匹配成功
                 theo_vec.append(sim_int)
-                exp_vec.append(peak_int[idx])
+                exp_vec.append(peak_int[nearest_idx])
                 matched_theo.append((sim_wl, sim_int))
-                matched_exp.append((peak_wl[idx], peak_int[idx]))
+                matched_exp.append((peak_wl[nearest_idx], peak_int[nearest_idx]))
+                matched_flag[nearest_idx] = True
             else:
                 # 匹配失败：理论有谱线，实验没有 → 实验强度记为0 （匹配失败策略待完善）
                 theo_vec.append(sim_int)#（可以设置为0或者是平均值什么的）
                 exp_vec.append(0)
 
-        if len(theo_vec) == 0: #（极端情况，无匹配峰）
+        if len(matched_exp) == 0: #（极端情况，无匹配峰）
             O_distance = 1e4
         else:
             theo_vec = np.array(theo_vec)
             exp_vec = np.array(exp_vec)
+            N_total = len(element_wl)
+            N_matched = len(matched_exp)
+            match_ratio = N_matched / N_total if N_total > 0 else 0 # 匹配率
+            # print(f"{element_name}: 匹配率 = {match_ratio:.2f}, 匹配峰数 = {N_matched}, 总谱线数 = {N_total}")
 
             # 归一化
             if np.sum(theo_vec) > 0:
-                theo_vec = theo_vec / np.linalg.norm(theo_vec)
+                theo_vec = theo_vec / np.sum(theo_vec)
             if np.sum(exp_vec) > 0:
-                exp_vec = exp_vec / np.linalg.norm(exp_vec)
-
-            O_distance = np.sqrt(np.sum((theo_vec - exp_vec) ** 2))
+                exp_vec = exp_vec / np.sum(exp_vec)
+            O_distance =(np.sqrt(np.sum((theo_vec - exp_vec) ** 2)))/(0.03 + match_ratio)  # 考虑匹配率的影响 0.03防止除0
 
         match_results[element_name] = O_distance
         base_elem = ''.join([c for c in element_name if not c.isdigit() and c not in ["I","V"]])
         element_distance[base_elem].append(O_distance)
-        if element_name == 'AlI':
+        if element_name == 'LiI':
             plt.figure(figsize=(8,4))
 
-            # 理论匹配谱线（蓝色竖线）
-            for wl, inten in matched_theo:
-                plt.vlines(wl, 0, inten/np.max([i for _,i in matched_theo]), 
-                        color='b', alpha=0.7, label='Theoretical' if wl==matched_theo[0][0] else "")
+        # 全部理论谱线（浅蓝）
+            all_theo_intensity = element_intensity / np.sum(element_intensity)
+            for wl, inten_norm in zip(element_wl, all_theo_intensity):
+                plt.vlines(wl, 0, inten_norm,
+                        color='lightblue', alpha=0.5,
+                        label='All Theoretical' if wl==element_wl[0] else "")
 
-            # 实验匹配谱线（红色竖线）
-            for wl, inten in matched_exp:
-                plt.vlines(wl, 0, inten/np.max([i for _,i in matched_exp]), 
-                        color='r', alpha=0.7, label='Experimental' if wl==matched_exp[0][0] else "")
+            # 理论匹配谱线（蓝）
+            if matched_theo:
+                matched_theo_intensity = np.array([inten for _, inten in matched_theo])
+                matched_theo_norm = matched_theo_intensity / np.sum(matched_theo_intensity)
+                for (wl, _), inten_norm in zip(matched_theo, matched_theo_norm):
+                    plt.vlines(wl, 0, inten_norm,
+                            color='b', alpha=0.7,
+                            label='Matched Theoretical' if wl==matched_theo[0][0] else "")
+
+            # --- 匹配成功的实验谱线（红色） ---
+            if matched_exp:
+                matched_exp_intensity = np.array([inten for _, inten in matched_exp])
+                matched_exp_norm = matched_exp_intensity / np.sum(matched_exp_intensity)
+                for (wl, _), inten_norm in zip(matched_exp, matched_exp_norm):
+                    plt.vlines(wl, 0, inten_norm,
+                            color='r', alpha=0.7,
+                            label='Matched Experimental' if wl==matched_exp[0][0] else "")
 
             plt.title(f'Matched Stick Spectrum for {element_name}')
             plt.xlabel('Wavelength (nm)')
             plt.ylabel('Normalized Intensity')
             plt.legend()
             plt.show()
-    # 粒子
-    # print("\n--- 粒子层面 ---")
-    # for elem, distance in sorted(match_results.items(), key=lambda x: x[1]):
-    #     print(f"{elem}: 距离(O_distance) = {distance:.4f}")
+
+
+    #粒子
+    print("\n--- 粒子层面 ---")
+    for elem, distance in sorted(match_results.items(), key=lambda x: x[1]):
+        print(f"{elem}: 距离 = {distance:.4f}")
 
     # 元素
     print("\n--- 元素层面 ---")
     for elem, distances in sorted(element_distance.items(), key=lambda x: np.mean(x[1])):
         avg_distance = np.mean(distances)
-        print(f"{elem}: 平均距离(O_distance) = {avg_distance:.4f}")
+        print(f"{elem}: 平均距离 = {avg_distance:.4f}")
 
     return match_results
-b=compute_element_confidence_shape(elements, peak_wl, peak_int, scope=1.0)
+b=compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.25)
+
+
+
 
 # #debug
 # target_element = "CrII"   # 想要高亮的元素
@@ -252,10 +290,6 @@ b=compute_element_confidence_shape(elements, peak_wl, peak_int, scope=1.0)
 # for elem, distance in sorted(a.items(), key=lambda x: x[1]):
 #     confidence=(1/distance)/distance_sum
 #     print(f"{elem}: 置信度 = {confidence:.4f}")
-
-
-
-
 
 
 # plt.plot(x, signal)
