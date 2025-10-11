@@ -6,8 +6,8 @@ import glob
 import os   
 
 
-folder_path = r'E:\工作文件\课题组激光诱导击穿光谱学习\LIBS-ElementRecogonise\Latest\Elements_database' #元素库路径
-data=pd.read_csv(r'E:\工作文件\课题组激光诱导击穿光谱学习\LIBS-ElementRecogonise\Latest\SpecSimuDatabase\Li100_10000K.csv',header=0)
+folder_path = r'D:\LIBS\ElementDetectation\10.10\Automatic-Elements-Recognition-for-LIBS-main\Elements_database' #元素库路径
+data=pd.read_csv(r'D:\LIBS\ElementDetectation\10.10\Automatic-Elements-Recognition-for-LIBS-main\SpecSimuDatabase\Cr100_10000K.csv',header=0)
 data=data.to_numpy()
 wl=data[:,0]
 intensity_sum=data[:,1]
@@ -21,7 +21,7 @@ kB=8.617330350e-5 #eV/K
 
 #----必备函数定义----
 #计算U（T） 返回U和U总和
-def U_Calculate(g,E):
+def U_Calculate(g,A,E):
     U=np.zeros(len(g))
     for i in range(len(g)):
         U[i]=g[i]*np.exp(-E[i]/(kB*T))
@@ -29,7 +29,7 @@ def U_Calculate(g,E):
 
 #计算相对强度 返回相对强度
 def rel_intensity(wl,A,E,g):
-    U_T,U_T_sum=U_Calculate(g,E)
+    U_T,U_T_sum=U_Calculate(g,A,E)
     rel_intensity=np.zeros(len(wl))
     for i in range(len(wl)):
         rel_intensity[i]=(A[i]*g[i]*np.exp(-E[i]/(kB*T)))/U_T_sum
@@ -37,7 +37,7 @@ def rel_intensity(wl,A,E,g):
 
 #元素库制作 返回elements字典和elements_list元素列表
 def elements_database(folder_path):
-    folder_path = r'E:\工作文件\课题组激光诱导击穿光谱学习\LIBS-ElementRecogonise\Latest\Elements_database' #元素库路径
+    folder_path = r'D:\LIBS\ElementDetectation\10.10\Automatic-Elements-Recognition-for-LIBS-main\Elements_database' #元素库路径
     # 获取所有Excel文件路径
     file_list = glob.glob(os.path.join(folder_path, "*.csv"))
     # 获取元素名字（去掉路径和后缀）
@@ -67,15 +67,53 @@ def elements_database(folder_path):
     return elements,elements_list
 
 
+
+def Boltzmann_fit(I, A, g, E):
+    y = np.log(I/ (g * A))
+
+    # 线性拟合
+    coefficients = np.polyfit(E, y, 1) #slope斜率 intercpet截距 拟合
+    slope, intercept = coefficients
+    T = -1/(slope * kB)  # 温度计算
+    return coefficients, slope, intercept, T, y
+
+
 #-----主程序-----
 elements,elements_list=elements_database(folder_path)
 
-plt.plot(wl,intensity_atom)
-plt.xlabel('Wavelength (nm)')
-plt.ylabel('Intensity (a.u.)')
-plt.title('NIST Spectrum Simulation of Cr')
-# plt.xlim(200,900)
-plt.ylim(0,1.1*max(intensity_sum))
-# plt.grid()
-plt.xticks(np.arange(200, 901, 100))
-plt.show()
+element_name = "CrI"  # 元素名需与文件名一致，例如 "CrI.csv"
+if element_name in elements:
+    element_data = elements[element_name]["data"]
+    wl_theo = element_data[:, 0]
+    rel_intensity_theo = element_data[:, 1]
+
+    print(f"\n=== {element_name} 理论谱线 ===")
+    for i in range(len(wl_theo)):
+        print(f"λ = {wl_theo[i]:.3f} nm,  相对强度 = {rel_intensity_theo[i]:.4e}")
+
+    # ===== 绘制 CrI 模拟光谱 =====
+    plt.figure(figsize=(10, 5))
+    for i in range(len(wl_theo)):
+        # 在每个谱线波长位置画一条垂直于x轴的线
+        plt.vlines(x=wl_theo[i], ymin=0, ymax=rel_intensity_theo[i],
+                color='r', linewidth=1.2, alpha=0.8)
+
+    plt.xlabel("Wavelength (nm)")
+    plt.ylabel("Relative Intensity (a.u.)")
+    plt.title(f"NIST Simulated Spectrum of {element_name}")
+    plt.xlim(200, 900)
+    plt.ylim(0, 1.1 * max(rel_intensity_theo))
+    plt.grid(True, linestyle='--', alpha=0.4)
+    plt.show()
+
+
+
+# plt.plot(wl,intensity_atom)
+# plt.xlabel('Wavelength (nm)')
+# plt.ylabel('Intensity (a.u.)')
+# plt.title('NIST Spectrum Simulation of Cr')
+# # plt.xlim(200,900)
+# plt.ylim(0,1.1*max(intensity_sum))
+# # plt.grid()
+# plt.xticks(np.arange(200, 901, 100))
+# plt.show()
