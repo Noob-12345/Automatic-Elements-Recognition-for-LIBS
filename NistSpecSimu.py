@@ -87,6 +87,7 @@ if element_name in elements:
     wl_theo = element_data[:, 0]
     rel_intensity_theo = element_data[:, 1]
 
+    
     print(f"\n=== {element_name} 理论谱线 ===")
     for i in range(len(wl_theo)):
         print(f"λ = {wl_theo[i]:.3f} nm,  相对强度 = {rel_intensity_theo[i]:.4e}")
