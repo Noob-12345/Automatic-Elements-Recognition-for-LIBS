@@ -16,8 +16,8 @@ from Wavelet_peakfinding import find_peaks1,find_peaks_ridge,peak_correction,wav
 T=10000 
 kB=8.617330350e-5 #eV/K
 #-----数据导入-----
-folder_path = r'E:\工作文件\课题组激光诱导击穿光谱学习\LIBS-ElementRecogonise\Latest\Elements_database' #元素库路径
-data=pd.read_csv(r'E:\工作文件\课题组激光诱导击穿光谱学习\LIBS-ElementRecogonise\Latest\SpecSimuDatabase\Li100_10000K.csv',header=0,skipinitialspace=True)#待测光谱路径
+folder_path = r'D:\LIBS\ElementDetectation\10.10\Automatic-Elements-Recognition-for-LIBS-main\Elements_database' #元素库路径
+data=pd.read_csv(r'D:\LIBS\ElementDetectation\10.10\Automatic-Elements-Recognition-for-LIBS-main\SpecSimuDatabase\Cr100_10000K.csv',header=0,skipinitialspace=True)#待测光谱路径
 data = data.fillna(0).to_numpy()
 data = np.nan_to_num(data, nan=0.0)
 x = data[:, 0]
@@ -29,7 +29,7 @@ intensity_ionized=data[:,3]
 
 #----必备函数定义----
 #计算U（T） 返回U和U总和
-def U_Calculate(g,E):
+def U_Calculate(g,A,E):
     U=np.zeros(len(g))
     for i in range(len(g)):
         U[i]=g[i]*np.exp(-E[i]/(kB*T))
@@ -37,7 +37,7 @@ def U_Calculate(g,E):
 
 #计算相对强度 返回相对强度
 def rel_intensity(wl,A,E,g):
-    U_T,U_T_sum=U_Calculate(g,E)
+    U_T,U_T_sum=U_Calculate(g,A,E)
     rel_intensity=np.zeros(len(wl))
     for i in range(len(wl)):
         rel_intensity[i]=(A[i]*g[i]*np.exp(-E[i]/(kB*T)))/U_T_sum
@@ -45,7 +45,7 @@ def rel_intensity(wl,A,E,g):
 
 #元素库制作 返回elements字典和elements_list元素列表
 def elements_database(folder_path):
-    folder_path = r'E:\工作文件\课题组激光诱导击穿光谱学习\LIBS-ElementRecogonise\Latest\Elements_database' #元素库路径
+    folder_path = r'D:\LIBS\ElementDetectation\10.10\Automatic-Elements-Recognition-for-LIBS-main\Elements_database' #元素库路径
     # 获取所有Excel文件路径
     file_list = glob.glob(os.path.join(folder_path, "*.csv"))
     # 获取元素名字（去掉路径和后缀）
@@ -62,7 +62,12 @@ def elements_database(folder_path):
         A=even_rows[:,2]
         E=even_rows[:,3]*1.2398*10**(-4) #eV
         g=even_rows[:,7]
-    #波段过滤 200-900nm
+        # 强制转换为 float
+        wl = wl.astype(float)
+        A  = A.astype(float)
+        E  = E.astype(float)
+        g  = g.astype(float)
+        #波段过滤 200-900nm
         mask = (wl >= 200) & (wl <= 900)
         wl = wl[mask]
         A = A[mask]
@@ -70,16 +75,75 @@ def elements_database(folder_path):
         g = g[mask]
         
         relative_intensity=rel_intensity(wl,A,E,g)
-        matrix = np.column_stack((wl, relative_intensity))
+        matrix = np.column_stack((wl, relative_intensity,A,E,g))
         elements[element_name] = { "data": matrix}
     return elements,elements_list
 
-#计算匹配度（元素库内光谱与待测光谱中元素的匹配度）
+#玻尔兹曼图拟合 返回斜率，截距，温度，y
+def Boltzmann_fit(I, wl,A, g, E):
+    y = np.log(I/ (g * A))
+
+    # 线性拟合
+    coefficients = np.polyfit(E, y, 1) #slope斜率 intercpet截距 拟合
+    slope, intercept = coefficients
+    T = -1/(slope * kB)  # 温度计算
+    return slope, intercept, T, y
+
+def Boltzmann_plot(matched_i, matched_wl, element_A, element_E, element_g, element_wl,element_name):
+
+#参数说明:matched_theo匹配到的理论谱线  matched_exp匹配到的实验谱线  element_A元素的A  element_E元素的E  element_g元素的g  element_wl元素的波长列表  element_name元素名称
+#用途说明：检测匹配点并且绘制玻尔兹曼图
+    # ====== ② 玻尔兹曼图计算与绘制 ======
+    if len(matched_wl) > 2:  # 至少3个点才能线性拟合
+        print(f"\n--- {element_name} 玻尔兹曼图 ---")
+        
+        # 提取匹配到的谱线参数（与 matched_exp 对应的理论参数）
+        matched_wl = np.array([t[0] for t in matched_wl])
+        matched_I = np.array([t[1] for t in matched_i])  # 实验强度
+        # 从理论库中取对应的 A、E、g
+        matched_idx = [np.argmin(np.abs(element_wl - wl)) for wl in matched_wl]
+        A_sel = element_A[matched_idx]
+        E_sel = element_E[matched_idx]
+        g_sel = element_g[matched_idx]
+
+
+        matched_I = np.array(matched_I, dtype=float)
+        A_sel = np.array(A_sel, dtype=float)
+        g_sel = np.array(g_sel, dtype=float)
+        E_sel = np.array(E_sel, dtype=float)
+
+        # 玻尔兹曼拟合
+        slope, intercept, T_fit, y = Boltzmann_fit(matched_I, matched_wl,A_sel, g_sel, E_sel)
+        print(f"拟合温度 T = {T_fit:.2f} K, 斜率 = {slope:.3f}")
+        
+        # 绘图
+        plt.figure(figsize=(6,4))
+        plt.scatter(E_sel, y, c='r', label='Points')
+        plt.plot(E_sel, slope*E_sel + intercept, 'b--', label=f'fit: T={T_fit:.1f} K')
+        plt.xlabel('E (eV)')
+        plt.ylabel('ln(I / (g·A))')
+        plt.title(f'{element_name} Boltzmann Plot')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.show()
+    else:
+        print(f"{element_name} 匹配峰数不足，无法绘制玻尔兹曼图。")
 
 #-----主程序-----
 elements,elements_list=elements_database(folder_path)
 true_peak_idx, peak_wl, peak_int = wavelet_peak_detection(signal,x,wavelet='mexh', scales=np.arange(1, 11), 
                            neighbor=4, min_length=3, coeffi_threshold=1000, window=5)#峰值校正
+
+#寻峰结果显示
+plt.figure(figsize=(10,5))
+plt.plot(x, signal, label='Original')  # 原始信号曲线
+plt.scatter(peak_wl, peak_int, color='red', marker='o', s=50)
+plt.xlabel('X')   # 根据你的数据修改横坐标单位
+plt.ylabel('Signal')
+plt.title('Peak')
+plt.legend()
+plt.grid(True)
+
 
 
 #-----相似度设置-----
@@ -158,6 +222,9 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.25):
         element_matrix = element_data["data"]
         element_wl = element_matrix[:, 0]
         element_intensity = element_matrix[:, 1]
+        element_A=element_matrix[:,2]
+        element_E=element_matrix[:,3]
+        element_g=element_matrix[:,4]
         #强度（计算O_distance 用）
         theo_vec = [] 
         exp_vec = []
@@ -189,7 +256,7 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.25):
                 matched_flag[nearest_idx] = True
             else:
                 # 匹配失败：理论有谱线，实验没有 → 实验强度记为0 （匹配失败策略待完善）
-                theo_vec.append(sim_int)#（可以设置为0或者是平均值什么的）
+                theo_vec.append(0)#（可以设置为0或者是平均值什么的）
                 exp_vec.append(0)
 
         if len(matched_exp) == 0: #（极端情况，无匹配峰）
@@ -212,7 +279,8 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.25):
         match_results[element_name] = O_distance
         base_elem = ''.join([c for c in element_name if not c.isdigit() and c not in ["I","V"]])
         element_distance[base_elem].append(O_distance)
-        if element_name == 'LiI':
+
+        if element_name == 'CrI':
             plt.figure(figsize=(8,4))
 
         # 全部理论谱线（浅蓝）
@@ -226,8 +294,8 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.25):
             if matched_theo:
                 matched_theo_intensity = np.array([inten for _, inten in matched_theo])
                 matched_theo_norm = matched_theo_intensity / np.sum(matched_theo_intensity)
-                for (wl, _), inten_norm in zip(matched_theo, matched_theo_norm):
-                    plt.vlines(wl, 0, inten_norm,
+                for (wl, _), inten_norm_theo in zip(matched_theo, matched_theo_norm):
+                    plt.vlines(wl, 0, inten_norm_theo,
                             color='b', alpha=0.7,
                             label='Matched Theoretical' if wl==matched_theo[0][0] else "")
 
@@ -235,30 +303,46 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.25):
             if matched_exp:
                 matched_exp_intensity = np.array([inten for _, inten in matched_exp])
                 matched_exp_norm = matched_exp_intensity / np.sum(matched_exp_intensity)
-                for (wl, _), inten_norm in zip(matched_exp, matched_exp_norm):
-                    plt.vlines(wl, 0, inten_norm,
+                matched_exp_normalized = [(wl, inten_norm_exp)
+                          for (wl, _), inten_norm_exp in zip(matched_exp, matched_exp_norm)]
+                for (wl, _), inten_norm_exp in zip(matched_exp, matched_exp_norm):
+                    plt.vlines(wl, 0, inten_norm_exp,
                             color='r', alpha=0.7,
                             label='Matched Experimental' if wl==matched_exp[0][0] else "")
+            print()
+            print(matched_exp_normalized)
+
 
             plt.title(f'Matched Stick Spectrum for {element_name}')
             plt.xlabel('Wavelength (nm)')
             plt.ylabel('Normalized Intensity')
-            plt.legend()
-            plt.show()
+            Boltzmann_plot(matched_exp_normalized, matched_theo, element_A, element_E, element_g, element_wl,element_name)
 
 
-    #粒子
-    print("\n--- 粒子层面 ---")
-    for elem, distance in sorted(match_results.items(), key=lambda x: x[1]):
-        print(f"{elem}: 距离 = {distance:.4f}")
 
-    # 元素
-    print("\n--- 元素层面 ---")
-    for elem, distances in sorted(element_distance.items(), key=lambda x: np.mean(x[1])):
-        avg_distance = np.mean(distances)
-        print(f"{elem}: 平均距离 = {avg_distance:.4f}")
+#---------------Debug分割线-------------------------
+# #输出显示部分
+#     final_results = {}
+#     for base_elem, distances in element_distance.items():
+#         min_distance = min(distances)
+#         if min_distance < 0.2:  # 阈值可调
+#             final_results[base_elem] = min_distance
+#         else:
+#             final_results[base_elem] = np.mean(distances)
+
+#     #粒子
+#     print("\n--- 粒子层面 ---")
+#     for elem, distance in sorted(match_results.items(), key=lambda x: x[1]):
+#         print(f"{elem}: 距离 = {distance:.4f}")
+
+#     # 元素
+#     print("\n--- 元素层面 ---")
+#     for elem, distances in sorted(final_results.items(), key=lambda x: np.mean(x[1])):
+#         print(f"{elem}: 平均距离 = {distances:.4f}")
 
     return match_results
+
+
 b=compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.25)
 
 
