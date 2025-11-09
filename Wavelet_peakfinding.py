@@ -20,7 +20,7 @@ import pywt
 # signal=test_data[8500:10591,5]
 
 
-data=pd.read_csv(r'D:\LIBS\ElementDetectation\10.10\Automatic-Elements-Recognition-for-LIBS-main\SpecSimuDatabase\Li100_10000K.csv',header=0,skipinitialspace=True)
+data=pd.read_csv(r'E:\工作文件\课题组激光诱导击穿光谱学习\LIBS-ElementRecogonise\10.22\SpecSimuDatabase\Li100_10000K.csv',header=0,skipinitialspace=True)
 data = data.fillna(0).to_numpy()
 data = np.nan_to_num(data, nan=0.0)
 

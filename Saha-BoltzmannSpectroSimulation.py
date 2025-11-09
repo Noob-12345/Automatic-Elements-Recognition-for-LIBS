@@ -32,7 +32,7 @@ def Boltzmann_fit(I,wl, A, g, E):
     T = -1/(slope * kB)  # 温度计算
     return coefficients, slope, intercept, T, y
 
-data=pd.read_csv(r'D:\LIBS\ElementDetectation\10.10\Automatic-Elements-Recognition-for-LIBS-main\Elements_database\CrI.csv',header=1,encoding="gbk")
+data=pd.read_csv(r'E:\工作文件\课题组激光诱导击穿光谱学习\LIBS-ElementRecogonise\10.22\Elements_database\CrI.csv',header=1,encoding="gbk")
 df=data.to_numpy()
 even_rows = df[1::2]
 wl=even_rows[:,1]*0.1
@@ -52,12 +52,14 @@ wl = wl[mask]
 A = A[mask]
 E = E[mask]
 g = g[mask]
-relative_intensity_copy=[1000,800,600,1000,800,500,250,400,600]
+relative_intensity_copy=[140184,110430,86529,40022,30531,22560,8957,15061,20575]
+relative_intensity_copy_Norm=relative_intensity_copy / np.sum(relative_intensity_copy)  # 归一化
 relative_intensity=rel_intensity(wl,A,E,g)
 relative_intensity_Norm=relative_intensity / np.sum(relative_intensity)  # 归一化
 print(relative_intensity_Norm)
+print(relative_intensity_copy_Norm)
 #Boltzmann拟合
-coefficients, slope, intercept, T, y = Boltzmann_fit(relative_intensity_copy,wl, A, g, E)
+coefficients, slope, intercept, T, y = Boltzmann_fit(relative_intensity_copy_Norm,wl, A, g, E)
 print(f"Fitted Temperature: {T} K")
 
 
