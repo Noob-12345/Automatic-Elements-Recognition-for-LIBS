@@ -14,15 +14,9 @@ T=10000
 kB=8.617330350e-5 #eV/K
 #-----数据导入-----
 folder_path = r'D:\LIBS\ElementDetectation\11.10\Elements_database' #元素库路径
-signal_path= r'D:\LIBS\ElementDetectation\11.10\SpecSimuDatabase' 
 
-data=pd.read_csv(r'D:\LIBS\ElementDetectation\11.10\SpecSimuDatabase\Cr100_10000K_PF.csv',header=0,skipinitialspace=True)#待测光谱路径
-data = data.fillna(0).to_numpy()
-data = np.nan_to_num(data, nan=0.0)
-x = data[:, 0]
-intensity_sum=data[:,1]
-signal=data[:,1]
-intensity_ionized=data[:,3]
+
+
 
 #----必备函数定义----
 #计算U（T） 返回U和U总和
@@ -51,7 +45,6 @@ def elements_database(folder_path):
     #元素特征光谱制作
     elements={}
     for element_name in elements_list: 
-        dfs = []
         file_path = os.path.join(folder_path, element_name + ".csv")  # 拼接完整路径
         df = pd.read_csv(file_path,header=1,encoding="gbk")  # 读取该元素的csv
         df=df.to_numpy()
@@ -126,13 +119,6 @@ def Boltzmann_plot(matched_i, matched_wl, element_A, element_E, element_g, eleme
         plt.show()
     else:
         print(f"{element_name} 匹配峰数不足，无法绘制玻尔兹曼图。")
-
-
-#-----主程序-----
-elements,elements_list=elements_database(folder_path)
-true_peak_idx, peak_wl, peak_int = wavelet_peak_detection(signal,x,wavelet='mexh', scales=np.arange(1, 11), 
-                           neighbor=4, min_length=3, coeffi_threshold=1000, window=5)#峰值校正
-
 
 #方案二：谱线形状相似度
 #遍历每一个元素，在elements_database中提取出谱线的波长并且对应到寻峰结果peak_wl中寻找
@@ -215,42 +201,42 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.25):
         base_elem = ''.join([c for c in element_name if not c.isdigit() and c not in ["I","V"]])
         element_distance[base_elem].append(O_distance)
 
-        if element_name == 'CrI':
-            plt.figure(figsize=(8,4))
+        # if element_name == 'CrI':
+        #     plt.figure(figsize=(8,4))
 
-        # 全部理论谱线（浅蓝）
-            all_theo_intensity = element_intensity / np.sum(element_intensity)
-            for wl, inten_norm in zip(element_wl, all_theo_intensity):
-                plt.vlines(wl, 0, inten_norm,
-                        color='lightblue', alpha=0.5,
-                        label='All Theoretical' if wl==element_wl[0] else "")
+        # # 全部理论谱线（浅蓝）
+        #     all_theo_intensity = element_intensity / np.sum(element_intensity)
+        #     for wl, inten_norm in zip(element_wl, all_theo_intensity):
+        #         plt.vlines(wl, 0, inten_norm,
+        #                 color='lightblue', alpha=0.5,
+        #                 label='All Theoretical' if wl==element_wl[0] else "")
 
-            # 理论匹配谱线（蓝）
-            if matched_theo:
-                matched_theo_intensity = np.array([inten for _, inten in matched_theo])
-                matched_theo_norm = matched_theo_intensity / np.sum(matched_theo_intensity)
-                for (wl, _), inten_norm_theo in zip(matched_theo, matched_theo_norm):
-                    plt.vlines(wl, 0, inten_norm_theo,
-                            color='b', alpha=0.7,
-                            label='Matched Theoretical' if wl==matched_theo[0][0] else "")
+        #     # 理论匹配谱线（蓝）
+        #     if matched_theo:
+        #         matched_theo_intensity = np.array([inten for _, inten in matched_theo])
+        #         matched_theo_norm = matched_theo_intensity / np.sum(matched_theo_intensity)
+        #         for (wl, _), inten_norm_theo in zip(matched_theo, matched_theo_norm):
+        #             plt.vlines(wl, 0, inten_norm_theo,
+        #                     color='b', alpha=0.7,
+        #                     label='Matched Theoretical' if wl==matched_theo[0][0] else "")
 
-            # --- 匹配成功的实验谱线（红色） ---
-            if matched_exp:
-                matched_exp_intensity = np.array([inten for _, inten in matched_exp])
-                matched_exp_norm = matched_exp_intensity / np.sum(matched_exp_intensity)
-                matched_exp_normalized = [(wl, inten_norm_exp)
-                          for (wl, _), inten_norm_exp in zip(matched_exp, matched_exp_norm)]
-                for (wl, _), inten_norm_exp in zip(matched_exp, matched_exp_norm):
-                    plt.vlines(wl, 0, inten_norm_exp,
-                            color='r', alpha=0.7,
-                            label='Matched Experimental' if wl==matched_exp[0][0] else "")
+        #     # --- 匹配成功的实验谱线（红色） ---
+        #     if matched_exp:
+        #         matched_exp_intensity = np.array([inten for _, inten in matched_exp])
+        #         matched_exp_norm = matched_exp_intensity / np.sum(matched_exp_intensity)
+        #         matched_exp_normalized = [(wl, inten_norm_exp)
+        #                   for (wl, _), inten_norm_exp in zip(matched_exp, matched_exp_norm)]
+        #         for (wl, _), inten_norm_exp in zip(matched_exp, matched_exp_norm):
+        #             plt.vlines(wl, 0, inten_norm_exp,
+        #                     color='r', alpha=0.7,
+        #                     label='Matched Experimental' if wl==matched_exp[0][0] else "")
 
 
 
-            plt.title(f'Matched Stick Spectrum for {element_name}')
-            plt.xlabel('Wavelength (nm)')
-            plt.ylabel('Normalized Intensity')
-            Boltzmann_plot(matched_exp, matched_theo, element_A, element_E, element_g, element_wl,element_name)
+        #     plt.title(f'Matched Stick Spectrum for {element_name}')
+        #     plt.xlabel('Wavelength (nm)')
+        #     plt.ylabel('Normalized Intensity')
+        #     Boltzmann_plot(matched_exp, matched_theo, element_A, element_E, element_g, element_wl,element_name)
 
 
 
@@ -262,24 +248,41 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.25):
             final_results[base_elem] = min_distance
         else:
             final_results[base_elem] = np.mean(distances)
-
+    
     return match_results,final_results
 
 
-particle,elements=compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.25) 
-# 粒子
-print("\n--- 粒子层面 ---")
-for elem, distance in sorted(particle.items(), key=lambda x: x[1]):
-    print(f"{elem}: 距离 = {distance:.4f}")
+#-----主程序-----
+elements,elements_list=elements_database(folder_path)
 
-# 元素
-print("\n--- 元素层面 ---")
-for elem, distances in sorted(elements.items(), key=lambda x: np.mean(x[1])):
-    print(f"{elem}: 平均距离 = {distances:.4f}")
+signal_path= r'D:\LIBS\ElementDetectation\11.10\SpecSimuDatabase' 
+I_file_list = glob.glob(os.path.join(signal_path, "*.csv"))
+I_elements_list = [os.path.splitext(os.path.basename(f))[0] for f in I_file_list]
+
+for I_element_name in I_elements_list:
+    data=pd.read_csv(os.path.join(signal_path, I_element_name + ".csv"),header=0,skipinitialspace=True)#待测光谱路径
+    data = data.fillna(0).to_numpy()
+    data = np.nan_to_num(data, nan=0.0)
+    x = data[:, 0]
+    intensity_sum=data[:,1]
+    signal=data[:,1]
+    intensity_ionized=data[:,3]
+    true_peak_idx, peak_wl, peak_int = wavelet_peak_detection(signal,x,wavelet='mexh', scales=np.arange(1, 11), 
+                               neighbor=4, min_length=3, coeffi_threshold=1000, window=5)#峰值校正
+
+    particle_result,elements_result=compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.25)
+    print("\n---" ,I_element_name, "---") 
+    # 粒子
+    print("--- 粒子层面 ---\n")
+    for elem, distance in sorted(particle_result.items(), key=lambda x: x[1]):
+        print(f"{elem}: 距离 = {distance:.4f}")
+
+    # 元素
+    print("--- 元素层面 ---")
+    for elem, distances in sorted(elements_result.items(), key=lambda x: np.mean(x[1])):
+        print(f"{elem}: 平均距离 = {distances:.4f}")
 
 
 
-# plt.plot(x, signal)
-# plt.scatter(peak_wl, peak_int, color='red')
-# plt.show()
+
 
