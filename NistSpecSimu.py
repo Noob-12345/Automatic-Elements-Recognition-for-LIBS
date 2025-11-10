@@ -6,8 +6,8 @@ import glob
 import os   
 
 
-folder_path = r'D:\LIBS\ElementDetectation\10.10\Automatic-Elements-Recognition-for-LIBS-main\Elements_database' #元素库路径
-data=pd.read_csv(r'D:\LIBS\ElementDetectation\10.10\Automatic-Elements-Recognition-for-LIBS-main\SpecSimuDatabase\Cr100_10000K.csv',header=0)
+folder_path = r'D:\LIBS\ElementDetectation\11.10\Elements_database' #元素库路径
+data=pd.read_csv(r'D:\LIBS\ElementDetectation\11.10\SpecSimuDatabase\Cr100_10000K.csv',header=0)
 data=data.to_numpy()
 wl=data[:,0]
 intensity_sum=data[:,1]

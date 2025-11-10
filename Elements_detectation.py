@@ -1,6 +1,3 @@
-#本文件用于将前面的寻峰代码和模拟谱峰代码结合在一起
-#并且自写规则进行置信度计算
-#参量解释：elements：元素数据库
 
 import numpy as np
 import pandas as pd
@@ -16,8 +13,10 @@ from Wavelet_peakfinding import find_peaks1,find_peaks_ridge,peak_correction,wav
 T=10000 
 kB=8.617330350e-5 #eV/K
 #-----数据导入-----
-folder_path = r'E:\工作文件\课题组激光诱导击穿光谱学习\LIBS-ElementRecogonise\10.22\Elements_database' #元素库路径
-data=pd.read_csv(r'E:\工作文件\课题组激光诱导击穿光谱学习\LIBS-ElementRecogonise\10.22\SpecSimuDatabase\Cr100_10000K_PF.csv',header=0,skipinitialspace=True)#待测光谱路径
+folder_path = r'D:\LIBS\ElementDetectation\11.10\Elements_database' #元素库路径
+signal_path= r'D:\LIBS\ElementDetectation\11.10\SpecSimuDatabase' 
+
+data=pd.read_csv(r'D:\LIBS\ElementDetectation\11.10\SpecSimuDatabase\Cr100_10000K_PF.csv',header=0,skipinitialspace=True)#待测光谱路径
 data = data.fillna(0).to_numpy()
 data = np.nan_to_num(data, nan=0.0)
 x = data[:, 0]
@@ -44,7 +43,7 @@ def rel_intensity(wl,A,E,g):
 
 #元素库制作 返回elements字典和elements_list元素列表
 def elements_database(folder_path):
-    folder_path = r'E:\工作文件\课题组激光诱导击穿光谱学习\LIBS-ElementRecogonise\10.22\Elements_database' #元素库路径
+    folder_path = r'D:\LIBS\ElementDetectation\11.10\Elements_database' #元素库路径
     # 获取所有Excel文件路径
     file_list = glob.glob(os.path.join(folder_path, "*.csv"))
     # 获取元素名字（去掉路径和后缀）
@@ -116,14 +115,14 @@ def Boltzmann_plot(matched_i, matched_wl, element_A, element_E, element_g, eleme
         print(f"拟合温度 T = {T_fit:.2f} K, 斜率 = {slope:.3f}")
         
         # 绘图
-        plt.figure(figsize=(6,4))
-        plt.scatter(E_sel, y, c='r', label='Points')
-        plt.plot(E_sel, slope*E_sel + intercept, 'b--', label=f'fit: T={T_fit:.1f} K')
-        plt.xlabel('E (eV)')
-        plt.ylabel('ln(I / (g·A))')
-        plt.title(f'{element_name} Boltzmann Plot')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
+        # plt.figure(figsize=(6,4))
+        # plt.scatter(E_sel, y, c='r', label='Points')
+        # plt.plot(E_sel, slope*E_sel + intercept, 'b--', label=f'fit: T={T_fit:.1f} K')
+        # plt.xlabel('E (eV)')
+        # plt.ylabel('ln(I / (g·A))')
+        # plt.title(f'{element_name} Boltzmann Plot')
+        # plt.legend()
+        # plt.grid(True, alpha=0.3)
         plt.show()
     else:
         print(f"{element_name} 匹配峰数不足，无法绘制玻尔兹曼图。")
@@ -134,22 +133,11 @@ elements,elements_list=elements_database(folder_path)
 true_peak_idx, peak_wl, peak_int = wavelet_peak_detection(signal,x,wavelet='mexh', scales=np.arange(1, 11), 
                            neighbor=4, min_length=3, coeffi_threshold=1000, window=5)#峰值校正
 
-# #寻峰结果显示
-# plt.figure(figsize=(10,5))
-# plt.plot(x, signal, label='Original')  # 原始信号曲线
-# plt.scatter(peak_wl, peak_int, color='red', marker='o', s=50)
-# plt.xlabel('X')   # 根据你的数据修改横坐标单位
-# plt.ylabel('Signal')
-# plt.title('Peak')
-# plt.legend()
-# plt.grid(True)
-
 
 #方案二：谱线形状相似度
 #遍历每一个元素，在elements_database中提取出谱线的波长并且对应到寻峰结果peak_wl中寻找
 #scope为1nm的最近峰，如果超出1nm那很可能是寻峰问题，则舍弃掉该谱线
 #将每个元素提出出来的所有谱线与实际峰值进行对比，计算欧几里得距离
-
 def compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.25):
     """
     方案二：用理论和实验谱形的欧几里得距离作为相似度
@@ -161,7 +149,7 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.25):
 
     match_results = {}
     element_distance = defaultdict(list)
-
+    final_results = {} #元素层面显示
     #遍历每一个粒子
     for element_name, element_data in elements.items():
         element_matrix = element_data["data"]
@@ -227,7 +215,7 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.25):
         base_elem = ''.join([c for c in element_name if not c.isdigit() and c not in ["I","V"]])
         element_distance[base_elem].append(O_distance)
 
-        if element_name == 'AlII':
+        if element_name == 'CrI':
             plt.figure(figsize=(8,4))
 
         # 全部理论谱线（浅蓝）
@@ -267,8 +255,7 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.25):
 
 
 #---------------Debug分割线-------------------------
-#输出显示部分
-    final_results = {}
+#元素置信度判断
     for base_elem, distances in element_distance.items():
         min_distance = min(distances)
         if min_distance < 0.2:  # 阈值可调
@@ -276,50 +263,20 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.25):
         else:
             final_results[base_elem] = np.mean(distances)
 
-    # 粒子
-    print("\n--- 粒子层面 ---")
-    for elem, distance in sorted(match_results.items(), key=lambda x: x[1]):
-        print(f"{elem}: 距离 = {distance:.4f}")
-
-    # # 元素
-    # print("\n--- 元素层面 ---")
-    # for elem, distances in sorted(final_results.items(), key=lambda x: np.mean(x[1])):
-    #     print(f"{elem}: 平均距离 = {distances:.4f}")
-
-    # return match_results
+    return match_results,final_results
 
 
-b=compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.25)
+particle,elements=compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.25) 
+# 粒子
+print("\n--- 粒子层面 ---")
+for elem, distance in sorted(particle.items(), key=lambda x: x[1]):
+    print(f"{elem}: 距离 = {distance:.4f}")
 
+# 元素
+print("\n--- 元素层面 ---")
+for elem, distances in sorted(elements.items(), key=lambda x: np.mean(x[1])):
+    print(f"{elem}: 平均距离 = {distances:.4f}")
 
-
-
-# #debug
-# target_element = "CrII"   # 想要高亮的元素
-# target_element2="NaII"
-
-# for elem in elements_list:
-#     if elem == target_element:  
-#         plt.scatter(elements[elem]['data'][:,0], elements[elem]['data'][:,1], 
-#                     s=10, color='blue', label=f"{elem} (target)")  
-#     elif elem == target_element2:  
-#         plt.scatter(elements[elem]['data'][:,0], elements[elem]['data'][:,1], 
-#                     s=10, color='orange', label=f"{elem} (target)")
-#     else:
-#         plt.scatter(elements[elem]['data'][:,0], elements[elem]['data'][:,1], 
-#                     s=2, color='green')
-
-
-
-#-----置信度设置-----
-#方案一：整体相似度反比归一化   (1/distance)/sum(1/distance)
-# distance_sum=0
-# for distance in sorted(a.values()):
-#     distance_sum+=1/distance
-
-# for elem, distance in sorted(a.items(), key=lambda x: x[1]):
-#     confidence=(1/distance)/distance_sum
-#     print(f"{elem}: 置信度 = {confidence:.4f}")
 
 
 # plt.plot(x, signal)

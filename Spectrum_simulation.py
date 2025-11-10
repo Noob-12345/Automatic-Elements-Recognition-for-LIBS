@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 #数据导入
-data = pd.read_csv(r'E:\工作文件\课题组激光诱导击穿光谱学习\LIBS-ElementRecogonise\Latest\Elements_database\CrII.csv',header=1,skipinitialspace=True,encoding="gbk")
+data = pd.read_csv(r'D:\LIBS\ElementDetectation\11.10\Elements_database\CrII.csv',header=1,skipinitialspace=True,encoding="gbk")
 data=data.to_numpy()
 even_rows = data[1::2]
 
