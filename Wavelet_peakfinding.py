@@ -10,17 +10,9 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import pywt
 
-# ====== 1.模拟信号 ======
-# x = np.linspace(0, 100, 500)
-# signal = (np.exp(-(x-30)**2/20) +
-#           0.8*np.exp(-(x-70)**2/10))  # 高斯峰 + 噪声
-# test_data=pd.read_excel('test_data.xlsx',header=1)
-# test_data=test_data.to_numpy()
-# x=test_data[8500:10591,0] #300-340nm
-# signal=test_data[8500:10591,5]
 
 
-data=pd.read_csv(r'D:\LIBS\ElementDetectation\11.10\SpecSimuDatabase\Li100_10000K_PF.csv',header=0,skipinitialspace=True)
+data=pd.read_csv(r'D:\LIBS\ElementDetectation\11.10\SpecSimuDatabase\Ca100_10000K_PF.csv',header=0,skipinitialspace=True)
 data = data.fillna(0).to_numpy()
 data = np.nan_to_num(data, nan=0.0)
 
@@ -30,21 +22,12 @@ intensity_sum=data[:,1]
 signal=data[:,2]
 intensity_ion=data[:,3]
 
+
 # ====== 2. 定义小波参数 ======
 wavelet = 'mexh'  # 小波函数
 scales = np.arange(1, 11)  # 尺度范围 (1=窄峰, 大=宽峰)
 coefficients, frequencies = pywt.cwt(signal, scales, wavelet)
 # coefficients.shape = (len(scales), len(signal))
-
-#寻峰策略1：阈值寻峰(尺度<阈值)
-def find_peaks1(signal,coefficients,threshold):
-    peaks = []
-    for i in range(len(signal)):
-
-        coefficients_i=coefficients[:,i]
-        if np.max(coefficients_i)>threshold:
-            peaks.append(i)
-    return peaks
 
 
 #寻峰策略2：脊线寻峰
@@ -131,7 +114,6 @@ def find_peaks_ridge(signal,coefficients,neighbor=4,min_length=3,coeffi_threshol
     # return corrected_peaks
     return  filtered_ridges
 
-
 #脊线峰值校正
 def peak_correction(ridges_found, wl, intensity, window=5):
     peak_ridgefound = []
@@ -160,7 +142,6 @@ def peak_correction(ridges_found, wl, intensity, window=5):
     true_peaks_int = [intensity[i] for i in true_peaks_idx]
 
     return true_peaks_idx, true_peaks_wl, true_peaks_int
-
 
 #小波脊线寻峰+校正整合
 def wavelet_peak_detection(signal, wl, wavelet='mexh', scales=np.arange(1, 11), 
@@ -225,9 +206,7 @@ def wavelet_peak_detection(signal, wl, wavelet='mexh', scales=np.arange(1, 11),
     true_peaks_wl=np.array(true_peaks_wl)
     return true_peaks_idx, true_peaks_wl, true_peaks_int
 
-
 #调用
-peaks_found=find_peaks1(signal,coefficients,10000) #阈值寻峰
 ridges_found=find_peaks_ridge(signal,coefficients,neighbor=3,min_length=3,coeffi_threshold=100) #小波脊线寻峰
 #后续对接
 #理想输出peak_ridgefound：峰值位置，峰值大小
@@ -238,40 +217,42 @@ ridges_found=find_peaks_ridge(signal,coefficients,neighbor=3,min_length=3,coeffi
 #     if np.isfinite(pos_idx) and int(pos_idx) not in peak_ridgefound:  # 去重
 #         peak_ridgefound.append(int(pos_idx))
 # print(peak_ridgefound)
-true_peak_idx, true_peak_wl, true_peak_int = peak_correction(ridges_found, x, signal, window=5) 
+# true_peak_idx, true_peak_wl, true_peak_int = peak_correction(ridges_found, x, signal, window=5) 
+true_peak_idx, true_peak_wl, true_peak_int = wavelet_peak_detection(signal, x, wavelet='mexh', scales=np.arange(1, 11), 
+                                                                   neighbor=3, min_length=3, coeffi_threshold=100, window=5)
 
 
 
 
 
-# #脊线寻峰结果显示
-# fig, (ax1, ax2, ax3) = plt.subplots(3, 1, sharex=True, figsize=(8, 6))
+#脊线寻峰结果显示
+fig, (ax1, ax2, ax3) = plt.subplots(3, 1, sharex=True, figsize=(8, 6))
 
-# # 原始信号1
-# ax1.plot(x, signal, label="Signal")
-# ax1.scatter(x[true_peak_idx], signal[true_peak_idx], color='red', s=5)
-# ax1.legend()
+# 原始信号1
+ax1.plot(x, signal, label="Signal")
+ax1.scatter(x[true_peak_idx], signal[true_peak_idx], color='red', s=5)
+ax1.legend()
 
-# # 脊线寻峰结果2
-# for ridge in ridges_found:
-#     scales = [p[0] for p in ridge]
-#     positions = [p[1] for p in ridge]
-#     positions = np.array(positions, dtype=float)
-#     scales = np.array(scales, dtype=float)
-#     mask = np.isfinite(positions)
-#     positions = positions[mask].astype(int)
-#     scales = scales[mask]
-#     ax2.scatter(x[positions], scales, color='red', s=2)
-# ax2.set_ylabel("Scale")
-# ax2.invert_yaxis()
+# 脊线寻峰结果2
+for ridge in ridges_found:
+    scales = [p[0] for p in ridge]
+    positions = [p[1] for p in ridge]
+    positions = np.array(positions, dtype=float)
+    scales = np.array(scales, dtype=float)
+    mask = np.isfinite(positions)
+    positions = positions[mask].astype(int)
+    scales = scales[mask]
+    ax2.scatter(x[positions], scales, color='red', s=2)
+ax2.set_ylabel("Scale")
+ax2.invert_yaxis()
 
-# # 小波系数图3
-# ax3.imshow(coefficients,
-#            extent=[x.min(), x.max(), scales.max(), scales.min()],
-#            cmap='jet', aspect='auto')
-# ax3.set_xlabel("x")
-# ax3.set_ylabel("Scale")
-# ax3.set_title("CWT Coefficients")
+# 小波系数图3
+ax3.imshow(coefficients,
+           extent=[x.min(), x.max(), scales.max(), scales.min()],
+           cmap='jet', aspect='auto')
+ax3.set_xlabel("x")
+ax3.set_ylabel("Scale")
+ax3.set_title("CWT Coefficients")
 
-# plt.tight_layout()
-# plt.show()
+plt.tight_layout()
+plt.show()

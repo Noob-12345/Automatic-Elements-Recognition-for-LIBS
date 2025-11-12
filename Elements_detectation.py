@@ -6,7 +6,7 @@ import os
 import pywt
 import matplotlib.pyplot as plt
 from collections import defaultdict
-from Wavelet_peakfinding import find_peaks1,find_peaks_ridge,peak_correction,wavelet_peak_detection #寻峰
+from Wavelet_peakfinding import find_peaks_ridge,peak_correction,wavelet_peak_detection #寻峰
 
 #-----预备-----
 #参数设置
@@ -14,9 +14,6 @@ T=10000
 kB=8.617330350e-5 #eV/K
 #-----数据导入-----
 folder_path = r'D:\LIBS\ElementDetectation\11.10\Elements_database' #元素库路径
-
-
-
 
 #----必备函数定义----
 #计算U（T） 返回U和U总和
@@ -201,42 +198,43 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.25):
         base_elem = ''.join([c for c in element_name if not c.isdigit() and c not in ["I","V"]])
         element_distance[base_elem].append(O_distance)
 
-        # if element_name == 'CrI':
-        #     plt.figure(figsize=(8,4))
+        if element_name == 'CaII':
+            plt.figure(figsize=(8,4))
 
-        # # 全部理论谱线（浅蓝）
-        #     all_theo_intensity = element_intensity / np.sum(element_intensity)
-        #     for wl, inten_norm in zip(element_wl, all_theo_intensity):
-        #         plt.vlines(wl, 0, inten_norm,
-        #                 color='lightblue', alpha=0.5,
-        #                 label='All Theoretical' if wl==element_wl[0] else "")
+        # 全部理论谱线（浅蓝）
+            all_theo_intensity = element_intensity / np.sum(element_intensity)
+            for wl, inten_norm in zip(element_wl, all_theo_intensity):
+                plt.vlines(wl, 0, inten_norm,
+                        color='lightblue', alpha=0.5,
+                        label='All Theoretical' if wl==element_wl[0] else "")
 
-        #     # 理论匹配谱线（蓝）
-        #     if matched_theo:
-        #         matched_theo_intensity = np.array([inten for _, inten in matched_theo])
-        #         matched_theo_norm = matched_theo_intensity / np.sum(matched_theo_intensity)
-        #         for (wl, _), inten_norm_theo in zip(matched_theo, matched_theo_norm):
-        #             plt.vlines(wl, 0, inten_norm_theo,
-        #                     color='b', alpha=0.7,
-        #                     label='Matched Theoretical' if wl==matched_theo[0][0] else "")
+            # 理论匹配谱线（蓝）
+            if matched_theo:
+                matched_theo_intensity = np.array([inten for _, inten in matched_theo])
+                matched_theo_norm = matched_theo_intensity / np.sum(matched_theo_intensity)
+                for (wl, _), inten_norm_theo in zip(matched_theo, matched_theo_norm):
+                    plt.vlines(wl, 0, inten_norm_theo,
+                            color='b', alpha=0.7,
+                            label='Matched Theoretical' if wl==matched_theo[0][0] else "")
 
-        #     # --- 匹配成功的实验谱线（红色） ---
-        #     if matched_exp:
-        #         matched_exp_intensity = np.array([inten for _, inten in matched_exp])
-        #         matched_exp_norm = matched_exp_intensity / np.sum(matched_exp_intensity)
-        #         matched_exp_normalized = [(wl, inten_norm_exp)
-        #                   for (wl, _), inten_norm_exp in zip(matched_exp, matched_exp_norm)]
-        #         for (wl, _), inten_norm_exp in zip(matched_exp, matched_exp_norm):
-        #             plt.vlines(wl, 0, inten_norm_exp,
-        #                     color='r', alpha=0.7,
-        #                     label='Matched Experimental' if wl==matched_exp[0][0] else "")
+            # --- 匹配成功的实验谱线（红色） ---
+            if matched_exp:
+                matched_exp_intensity = np.array([inten for _, inten in matched_exp])
+                matched_exp_norm = matched_exp_intensity / np.sum(matched_exp_intensity)
+                matched_exp_normalized = [(wl, inten_norm_exp)
+                          for (wl, _), inten_norm_exp in zip(matched_exp, matched_exp_norm)]
+                for (wl, _), inten_norm_exp in zip(matched_exp, matched_exp_norm):
+                    plt.vlines(wl, 0, inten_norm_exp,
+                            color='r', alpha=0.7,
+                            label='Matched Experimental' if wl==matched_exp[0][0] else "")
 
 
 
-        #     plt.title(f'Matched Stick Spectrum for {element_name}')
-        #     plt.xlabel('Wavelength (nm)')
-        #     plt.ylabel('Normalized Intensity')
-        #     Boltzmann_plot(matched_exp, matched_theo, element_A, element_E, element_g, element_wl,element_name)
+            plt.title(f'Matched Stick Spectrum for {element_name}')
+            plt.xlabel('Wavelength (nm)')
+            plt.ylabel('Normalized Intensity')
+            Boltzmann_plot(matched_exp, matched_theo, element_A, element_E, element_g, element_wl,element_name)
+            plt.show()
 
 
 
@@ -258,8 +256,11 @@ elements,elements_list=elements_database(folder_path)
 signal_path= r'D:\LIBS\ElementDetectation\11.10\SpecSimuDatabase' 
 I_file_list = glob.glob(os.path.join(signal_path, "*.csv"))
 I_elements_list = [os.path.splitext(os.path.basename(f))[0] for f in I_file_list]
-
+target_files=['Mg100_10000K_PF']
 for I_element_name in I_elements_list:
+
+    if I_element_name not in target_files:
+        continue  # 跳过不在名单内的文件
     data=pd.read_csv(os.path.join(signal_path, I_element_name + ".csv"),header=0,skipinitialspace=True)#待测光谱路径
     data = data.fillna(0).to_numpy()
     data = np.nan_to_num(data, nan=0.0)
