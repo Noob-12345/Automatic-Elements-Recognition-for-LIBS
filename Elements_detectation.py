@@ -68,14 +68,21 @@ def elements_database(folder_path):
     return elements,elements_list
 
 #玻尔兹曼图拟合 返回斜率，截距，温度，y
-def Boltzmann_fit(I, wl,A, g, E):
-    y = np.log(I*wl/ (g * A))
-
+def Boltzmann_fit(I, wl, A, g, E):
+    y = np.log(I*wl / (g * A))
+    
     # 线性拟合
-    coefficients = np.polyfit(E, y, 1) #slope斜率 intercpet截距 拟合
+    coefficients = np.polyfit(E, y, 1)  # slope斜率 intercept截距
     slope, intercept = coefficients
-    T = -1/(slope * kB)  # 温度计算
-    return slope, intercept, T, y
+    T = -1 / (slope * kB)  # 温度计算
+    
+    # 计算 R²
+    y_fit = slope * E + intercept
+    ss_res = np.sum((y - y_fit) ** 2)  # 残差平方和
+    ss_tot = np.sum((y - np.mean(y)) ** 2)  # 总平方和
+    R2 = 1 - (ss_res / ss_tot)
+    
+    return slope, intercept, T, y, R2
 
 def Boltzmann_plot(matched_i, matched_wl, element_A, element_E, element_g, element_wl,element_name):
 
@@ -101,18 +108,18 @@ def Boltzmann_plot(matched_i, matched_wl, element_A, element_E, element_g, eleme
         E_sel = np.array(E_sel, dtype=float)
 
         # 玻尔兹曼拟合
-        slope, intercept, T_fit, y = Boltzmann_fit(matched_I, matched_wl,A_sel, g_sel, E_sel)
+        slope, intercept, T_fit, y,R2 = Boltzmann_fit(matched_I, matched_wl,A_sel, g_sel, E_sel)
         print(f"拟合温度 T = {T_fit:.2f} K, 斜率 = {slope:.3f}")
         
-        # 绘图
-        # plt.figure(figsize=(6,4))
-        # plt.scatter(E_sel, y, c='r', label='Points')
-        # plt.plot(E_sel, slope*E_sel + intercept, 'b--', label=f'fit: T={T_fit:.1f} K')
-        # plt.xlabel('E (eV)')
-        # plt.ylabel('ln(I / (g·A))')
-        # plt.title(f'{element_name} Boltzmann Plot')
-        # plt.legend()
-        # plt.grid(True, alpha=0.3)
+        #绘图
+        plt.figure(figsize=(6,4))
+        plt.scatter(E_sel, y, c='r', label='Points')
+        plt.plot(E_sel, slope*E_sel + intercept, 'b--', label=f'fit: T={T_fit:.1f} K')
+        plt.xlabel('E (eV)')
+        plt.ylabel('ln(I / (g·A))')
+        plt.title(f'{element_name} Boltzmann Plot')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
         plt.show()
     else:
         print(f"{element_name} 匹配峰数不足，无法绘制玻尔兹曼图。")
@@ -133,6 +140,10 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.25):
     match_results = {}
     element_distance = defaultdict(list)
     final_results = {} #元素层面显示
+    Boltzmann_T={}
+    Boltzmann_R2={}
+
+
     #遍历每一个粒子
     for element_name, element_data in elements.items():
         element_matrix = element_data["data"]
@@ -194,12 +205,21 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.25):
             if O_distance ==0: #完全没谱线或者只有一条谱线的时候
                 O_distance=1e+4
 
-        match_results[element_name] = O_distance
-        base_elem = ''.join([c for c in element_name if not c.isdigit() and c not in ["I","V"]])
-        element_distance[base_elem].append(O_distance)
+        #BoltzmannT，R2计算
+        # 提取匹配到的谱线参数（与 matched_exp 对应的理论参数）
+        matched_wl = np.array([t[0] for t in matched_theo])
+        matched_I = np.array([t[1] for t in matched_exp])  # 实验强度
+        # 从理论库中取对应的 A、E、g
+        matched_idx = [np.argmin(np.abs(element_wl - wl)) for wl in matched_wl]
 
-        if element_name == 'CaII':
+        slope, intercept, T_fit, y, R2 = Boltzmann_fit(matched_exp, matched_theo, element_A[matched_idx], element_g[matched_idx], element_E[matched_idx])
+        Boltzmann_T[element_name] = T_fit
+        Boltzmann_R2[element_name] = R2
+
+
+        if element_name == 'SiI':
             plt.figure(figsize=(8,4))
+
 
         # 全部理论谱线（浅蓝）
             all_theo_intensity = element_intensity / np.sum(element_intensity)
@@ -236,18 +256,29 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.25):
             Boltzmann_plot(matched_exp, matched_theo, element_A, element_E, element_g, element_wl,element_name)
             plt.show()
 
-
+        match_results[element_name] = O_distance
+        base_elem = ''.join([c for c in element_name if not c.isdigit() and c not in ["I","V"]])
+        element_distance[base_elem].append(O_distance)
 
 #---------------Debug分割线-------------------------
 #元素置信度判断
     for base_elem, distances in element_distance.items():
         min_distance = min(distances)
-        if min_distance < 0.2:  # 阈值可调
+        if min_distance < 47.13333:  
             final_results[base_elem] = min_distance
         else:
             final_results[base_elem] = np.mean(distances)
     
-    return match_results,final_results
+#反归一化置信度输出
+    elements_confidence={}
+    for elem, distances in final_results.items():
+        if distances<10000:
+            #elements_confidence[elem]=1/(1+distances) #倒数映射
+            elements_confidence[elem]=np.exp(-1.5*distances) #指数映射
+        else:
+            elements_confidence[elem]=0
+
+    return match_results,final_results,elements_confidence
 
 
 #-----主程序-----
@@ -256,7 +287,7 @@ elements,elements_list=elements_database(folder_path)
 signal_path= r'D:\LIBS\ElementDetectation\11.10\SpecSimuDatabase' 
 I_file_list = glob.glob(os.path.join(signal_path, "*.csv"))
 I_elements_list = [os.path.splitext(os.path.basename(f))[0] for f in I_file_list]
-target_files=['Mg100_10000K_PF']
+target_files=['Cr50Al50_11605K_PF']
 for I_element_name in I_elements_list:
 
     if I_element_name not in target_files:
@@ -271,17 +302,19 @@ for I_element_name in I_elements_list:
     true_peak_idx, peak_wl, peak_int = wavelet_peak_detection(signal,x,wavelet='mexh', scales=np.arange(1, 11), 
                                neighbor=4, min_length=3, coeffi_threshold=1000, window=5)#峰值校正
 
-    particle_result,elements_result=compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.25)
+    particle_result,elements_result,elements_confidence=compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.25)
     print("\n---" ,I_element_name, "---") 
-    # 粒子
-    print("--- 粒子层面 ---\n")
-    for elem, distance in sorted(particle_result.items(), key=lambda x: x[1]):
-        print(f"{elem}: 距离 = {distance:.4f}")
+    # # # 粒子
+    # print("--- 粒子层面 ---\n")
+    # for elem, distance in sorted(particle_result.items(), key=lambda x: x[1]):
+    #     print(f"{elem}: 距离 = {distance:.4f}")
+    # 元素+置信度
+    print("--- 元素层面（距离 + 置信度） ---")
+    for elem in sorted(elements_result.keys(), key=lambda x: elements_result[x]):
+        dist = elements_result.get(elem, np.nan)
+        conf = elements_confidence.get(elem, 0)
+        print(f"{elem:<6s} 平均距离 = {dist:<8.4f} | 置信度 = {conf:<8.4f}")
 
-    # 元素
-    print("--- 元素层面 ---")
-    for elem, distances in sorted(elements_result.items(), key=lambda x: np.mean(x[1])):
-        print(f"{elem}: 平均距离 = {distances:.4f}")
 
 
 

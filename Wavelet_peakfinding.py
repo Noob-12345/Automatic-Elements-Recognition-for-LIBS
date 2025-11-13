@@ -1,7 +1,6 @@
 #小波变换寻峰算法
 #效果：输入光谱数据，输出峰值位置和大小，无论展宽。
 #寻峰方式：脊线寻峰
-
 #待解决问题：1、参数设置（尺度，领域半径，最小脊线长度） 2、脊线校正未作 3、处理nan值
 
 
@@ -12,7 +11,7 @@ import pywt
 
 
 
-data=pd.read_csv(r'D:\LIBS\ElementDetectation\11.10\SpecSimuDatabase\Ca100_10000K_PF.csv',header=0,skipinitialspace=True)
+data=pd.read_csv(r'D:\LIBS\ElementDetectation\11.10\SpecSimuDatabase\Fe100_10000K_PF.csv',header=0,skipinitialspace=True)
 data = data.fillna(0).to_numpy()
 data = np.nan_to_num(data, nan=0.0)
 
@@ -225,34 +224,34 @@ true_peak_idx, true_peak_wl, true_peak_int = wavelet_peak_detection(signal, x, w
 
 
 
-#脊线寻峰结果显示
-fig, (ax1, ax2, ax3) = plt.subplots(3, 1, sharex=True, figsize=(8, 6))
+# #脊线寻峰结果显示
+# fig, (ax1, ax2, ax3) = plt.subplots(3, 1, sharex=True, figsize=(8, 6))
 
-# 原始信号1
-ax1.plot(x, signal, label="Signal")
-ax1.scatter(x[true_peak_idx], signal[true_peak_idx], color='red', s=5)
-ax1.legend()
+# # 原始信号1
+# ax1.plot(x, signal, label="Signal")
+# ax1.scatter(x[true_peak_idx], signal[true_peak_idx], color='red', s=5)
+# ax1.legend()
 
-# 脊线寻峰结果2
-for ridge in ridges_found:
-    scales = [p[0] for p in ridge]
-    positions = [p[1] for p in ridge]
-    positions = np.array(positions, dtype=float)
-    scales = np.array(scales, dtype=float)
-    mask = np.isfinite(positions)
-    positions = positions[mask].astype(int)
-    scales = scales[mask]
-    ax2.scatter(x[positions], scales, color='red', s=2)
-ax2.set_ylabel("Scale")
-ax2.invert_yaxis()
+# # 脊线寻峰结果2
+# for ridge in ridges_found:
+#     scales = [p[0] for p in ridge]
+#     positions = [p[1] for p in ridge]
+#     positions = np.array(positions, dtype=float)
+#     scales = np.array(scales, dtype=float)
+#     mask = np.isfinite(positions)
+#     positions = positions[mask].astype(int)
+#     scales = scales[mask]
+#     ax2.scatter(x[positions], scales, color='red', s=2)
+# ax2.set_ylabel("Scale")
+# ax2.invert_yaxis()
 
-# 小波系数图3
-ax3.imshow(coefficients,
-           extent=[x.min(), x.max(), scales.max(), scales.min()],
-           cmap='jet', aspect='auto')
-ax3.set_xlabel("x")
-ax3.set_ylabel("Scale")
-ax3.set_title("CWT Coefficients")
+# # 小波系数图3
+# ax3.imshow(coefficients,
+#            extent=[x.min(), x.max(), scales.max(), scales.min()],
+#            cmap='jet', aspect='auto')
+# ax3.set_xlabel("x")
+# ax3.set_ylabel("Scale")
+# ax3.set_title("CWT Coefficients")
 
-plt.tight_layout()
-plt.show()
+# plt.tight_layout()
+# plt.show()
