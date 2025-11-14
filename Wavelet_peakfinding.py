@@ -11,7 +11,7 @@ import pywt
 
 
 
-data=pd.read_csv(r'D:\LIBS\ElementDetectation\11.10\SpecSimuDatabase\Fe100_10000K_PF.csv',header=0,skipinitialspace=True)
+data=pd.read_csv(r'D:\LIBS\ElementDetectation\11.10\SpecSimuDatabase\Li100_10000K_PF.csv',header=0,skipinitialspace=True)
 data = data.fillna(0).to_numpy()
 data = np.nan_to_num(data, nan=0.0)
 
