@@ -24,13 +24,13 @@ def Boltzmann_fit(I,wl, A, g, E):
     
     return coefficients, slope, intercept, T, y
 
-indices_to_keep = [0,1, 2, 3, 4,5,6,7,8]  # 要保留的索引
+indices_to_keep = [0,1,2,3,4,5,6,7]  # 要保留的索引
 
-A = np.array([1.48e+08, 1.50e+08, 1.62e+08, 3.15e+07,3.07e+07,3.16e+07,5.09e+07,5.14e+07,5.06e+07])[indices_to_keep]
-g = np.array([9,7,5,9,7,5,3,5,7])[indices_to_keep]
-E = np.array([3.463528,3.449264,3.437934,2.913481,2.899536,2.889452,3.323012,3.322313,3.321222])[indices_to_keep] #eV
-wl = np.array([357.869,359.347,360.534,425.433, 427.482, 428.97,520.453,520.606,520.845])[indices_to_keep]*10**(-9)
-I = np.array([3010,2403,1859,1021,779,577,279,470,640])[indices_to_keep]
+A = np.array([0.0281,0.0281,0.101,0.121,0.616,0.614,0.429,0.514])[indices_to_keep]
+g = np.array([4,2,4,6,4,2,4,6])[indices_to_keep]
+E = np.array([3.75,3.75,4.28,4.28,2.10,2.10,3.61,3.616])[indices_to_keep] #eV
+wl = np.array([330.24,330.30,568.2,568.8,588.9,589.5,818.3,819.5])[indices_to_keep]*10**(-9)
+I = np.array([186,92,215,424,15929,7950,1375,2701])[indices_to_keep]
 
 coefficients, slope, intercept, T, y = Boltzmann_fit(I,wl, A, g, E)
 
