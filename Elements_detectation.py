@@ -129,7 +129,7 @@ def Boltzmann_plot(matched_i, matched_wl, element_A, element_E, element_g, eleme
 #遍历每一个元素，在elements_database中提取出谱线的波长并且对应到寻峰结果peak_wl中寻找
 #scope为1nm的最近峰，如果超出1nm那很可能是寻峰问题，则舍弃掉该谱线
 #将每个元素提出出来的所有谱线与实际峰值进行对比，计算欧几里得距离
-def compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.25):
+def compute_element_confidence_shape(elements, peak_wl, peak_int,global_wl,global_intensity,scope=0.25):
     """
     方案二：用理论和实验谱形的欧几里得距离作为相似度
     elements: 元素数据库 { "ElemI": {"data": [wl, intensity]} }
@@ -226,7 +226,7 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.25):
 
         if element_name == 'FeI':
             plt.figure(figsize=(8,4))
-
+            print(match_ratio)
 
         # 全部理论谱线（浅蓝）
             all_theo_intensity = element_intensity / np.sum(element_intensity)
@@ -254,7 +254,24 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.25):
                     plt.vlines(wl, 0, inten_norm_exp,
                             color='r', alpha=0.7,
                             label='Matched Experimental' if wl==matched_exp[0][0] else "")
+                    
+            ### --- 新增波形标注逻辑 --- ###
+            plt.figure(figsize=(10,4))
+            plt.plot(global_wl, global_intensity, color='black', lw=1, label='Original Spectrum')
 
+            # 标出所有理论谱线位置（浅蓝色线）
+            for wl in element_wl:
+                plt.axvline(wl, color='cyan', alpha=0.3)
+
+            # 标出匹配到的实验峰（红色点）
+            for wl, inten in matched_exp:
+                plt.scatter(wl, inten, color='red', s=25)
+
+            plt.title('Original Spectrum with CrII Peaks Marked')
+            plt.xlabel('Wavelength (nm)')
+            plt.ylabel('Intensity')
+
+            plt.legend(loc='upper right')
 
 
             plt.title(f'Matched Stick Spectrum for {element_name}')
@@ -331,10 +348,10 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.25):
 #-----主程序-----
 elements,elements_list=elements_database(folder_path)
 
-signal_path= r'D:\LIBS\ElementDetectation\11.10\SpecSimuDatabase' 
+signal_path= r'D:\LIBS\ElementDetectation\11.10\SpecSimuDatabase' #待测光谱路径
 I_file_list = glob.glob(os.path.join(signal_path, "*.csv"))
 I_elements_list = [os.path.splitext(os.path.basename(f))[0] for f in I_file_list]
-target_files=['Fe100_10000K_PF']
+target_files=['304_10000K_PF']
 for I_element_name in I_elements_list:
 
     if I_element_name not in target_files:
@@ -349,7 +366,7 @@ for I_element_name in I_elements_list:
     true_peak_idx, peak_wl, peak_int = wavelet_peak_detection(signal,x,wavelet='mexh', scales=np.arange(1, 11), 
                                neighbor=4, min_length=3, coeffi_threshold=1000, window=5)#峰值校正
 
-    particle_result,elements_result,elements_T,elements_R2,elements_confidence=compute_element_confidence_shape(elements, peak_wl, peak_int, scope=0.25)
+    particle_result,elements_result,elements_T,elements_R2,elements_confidence=compute_element_confidence_shape(elements, peak_wl, peak_int,x,intensity_sum,scope=0.25)
     print("\n---" ,I_element_name, "---") 
     # # # 粒子
     # print("--- 粒子层面 ---\n")
