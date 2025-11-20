@@ -7,7 +7,7 @@ import pywt
 import matplotlib.pyplot as plt
 from collections import defaultdict
 from Wavelet_peakfinding import find_peaks_ridge,peak_correction,wavelet_peak_detection #寻峰
-
+from Elements_Combfact import elements_database #元素库制作
 #-----预备-----
 #参数设置
 T=10000 
@@ -16,57 +16,6 @@ kB=8.617330350e-5 #eV/K
 folder_path = r'D:\LIBS\ElementDetectation\11.10\Elements_database' #元素库路径
 
 #----必备函数定义----
-#计算U（T） 返回U和U总和
-def U_Calculate(g,A,E):
-    U=np.zeros(len(g))
-    for i in range(len(g)):
-        U[i]=g[i]*np.exp(-E[i]/(kB*T))
-    return U,np.sum(U)
-
-#计算相对强度 返回相对强度
-#遗留问题1：模拟强度到底要不要wl
-def rel_intensity(wl,A,E,g):
-    U_T,U_T_sum=U_Calculate(g,A,E)
-    rel_intensity=np.zeros(len(wl))
-    for i in range(len(wl)):
-        rel_intensity[i]=(A[i]*g[i]*np.exp(-E[i]/(kB*T)))/(U_T_sum*wl[i])  
-    return rel_intensity
-
-#元素库制作 返回elements字典和elements_list元素列表
-def elements_database(folder_path):
-    folder_path = r'D:\LIBS\ElementDetectation\11.10\Elements_database' #元素库路径
-    # 获取所有Excel文件路径
-    file_list = glob.glob(os.path.join(folder_path, "*.csv"))
-    # 获取元素名字（去掉路径和后缀）
-    elements_list = [os.path.splitext(os.path.basename(f))[0] for f in file_list]
-    #元素特征光谱制作
-    elements={}
-    for element_name in elements_list: 
-        file_path = os.path.join(folder_path, element_name + ".csv")  # 拼接完整路径
-        df = pd.read_csv(file_path,header=1,encoding="gbk")  # 读取该元素的csv
-        df=df.to_numpy()
-        even_rows = df[1::2]
-        wl=even_rows[:,1]*0.1
-        A=even_rows[:,2]
-        E=even_rows[:,3]*1.2398*10**(-4) #eV
-        g=even_rows[:,7]
-        # 强制转换为 float
-        wl = wl.astype(float)
-        A  = A.astype(float)
-        E  = E.astype(float)
-        g  = g.astype(float)
-        #波段过滤 200-900nm
-        mask = (wl >= 200) & (wl <= 900)
-        wl = wl[mask]
-        A = A[mask]
-        E = E[mask]
-        g = g[mask]
-        
-        relative_intensity=rel_intensity(wl,A,E,g)
-        matrix = np.column_stack((wl, relative_intensity,A,E,g))
-        elements[element_name] = { "data": matrix}
-    return elements,elements_list
-
 #玻尔兹曼图拟合 返回斜率，截距，温度，y
 def Boltzmann_fit(I, wl, A, g, E):
     y = np.log(I*wl / (g * A))
@@ -82,7 +31,94 @@ def Boltzmann_fit(I, wl, A, g, E):
     ss_tot = np.sum((y - np.mean(y)) ** 2)  # 总平方和
     R2 = 1 - (ss_res / ss_tot)
     
-    return slope, intercept, T, y, R2
+    return slope, intercept, T, R2, y
+
+def Boltzmann_fit_iterative(I, wl, A, g, E,R2_threshold=1e-1,R2_start_threshold=0.97,max_iter=5,verbose=False):
+    """
+    迭代 Boltzmann 拟合（删除偏差最大点）
+    同步删除所有变量：I, wl, A, g, E
+    """
+
+    # 转 numpy
+    I = np.array(I, float)
+    wl = np.array(wl, float)
+    A = np.array(A, float)
+    g = np.array(g, float)
+    E = np.array(E, float)
+
+    N = len(E)
+    idx = np.arange(N)
+
+    # ---- 初次拟合 ----
+    y = np.log(I * wl / (g * A))
+
+    slope, intercept = np.polyfit(E, y, 1)
+    y_pred = slope * E + intercept
+
+    ss_res = np.sum((y - y_pred)**2)
+    ss_tot = np.sum((y - np.mean(y))**2)
+    R2_init = 1 - ss_res / ss_tot
+
+    if verbose:
+        print(f"[Init] R²={R2_init:.5f}")
+
+    # ---- 若初始 R² 已够好 → 不迭代 ----
+    if R2_init >= R2_start_threshold:
+        T = -1/(slope*kB)
+        return slope, intercept, T, R2_init, \
+               y, E, wl, I, A, g
+
+    # ---- 迭代删除最差点 ----
+    R2_prev = R2_init
+
+    for it in range(max_iter):
+
+        y = np.log(I * wl / (g * A))
+        y_pred = slope * E + intercept
+        residuals = y - y_pred
+
+        # 找到偏差最大的点
+        worst = np.argmax(np.abs(residuals))
+
+        if verbose:
+            print(f"[Iter {it+1}] remove index {worst}, resid={residuals[worst]:.5f}")
+
+        # 同步删除所有变量
+        I = np.delete(I, worst)
+        wl = np.delete(wl, worst)
+        A = np.delete(A, worst)
+        g = np.delete(g, worst)
+        E = np.delete(E, worst)
+
+        if len(E) < 2:
+            break
+
+        # 重新拟合
+        y = np.log(I * wl / (g * A))
+        slope, intercept = np.polyfit(E, y, 1)
+        y_pred = slope * E + intercept
+
+        ss_res = np.sum((y - y_pred)**2)
+        ss_tot = np.sum((y - np.mean(y))**2)
+        R2_new = 1 - ss_res / ss_tot
+
+        delta_R2 = abs(R2_new - R2_prev)
+
+        if verbose:
+            print(f"    R²={R2_new:.5f}, ΔR²={delta_R2:.6f}")
+
+        if delta_R2 < R2_threshold:
+            break
+
+        R2_prev = R2_new
+
+    # ---- 最终温度 ----
+    T = -1/(slope*kB)
+
+    # 返回所有删点后的数据
+    return slope, intercept, T, R2_prev, \
+           np.log(I * wl / (g * A)), E, wl, I, A, g
+
 
 def Boltzmann_plot(matched_i, matched_wl, element_A, element_E, element_g, element_wl,element_name):
 
@@ -108,14 +144,18 @@ def Boltzmann_plot(matched_i, matched_wl, element_A, element_E, element_g, eleme
         E_sel = np.array(E_sel, dtype=float)
 
         # 玻尔兹曼拟合
-        slope, intercept, T_fit, y,R2 = Boltzmann_fit(matched_I, matched_wl,A_sel, g_sel, E_sel)
-        print(f"拟合温度 T = {T_fit:.2f} K, 斜率 = {slope:.3f}")
+        #slope, intercept, T_fit,R2, y_full = Boltzmann_fit(matched_I, matched_wl,A_sel, g_sel, E_sel)
+        # slope, intercept, T_fit,R2, y_full, y_used = Boltzmann_fit_iterative(matched_I, matched_wl,A_sel, g_sel, E_sel,R2_start_threshold=0.97,max_iter=5,verbose=False)
+        # print(f"拟合温度 T = {T_fit:.2f} K, 斜率 = {slope:.3f}")
         
         #绘图
+        slope, intercept, T_fit, R2, y_used, E_used, wl_used, I_used, A_used, g_used = \
+            Boltzmann_fit_iterative(matched_I, matched_wl, A_sel, g_sel, E_sel,
+                                    R2_start_threshold=0.97, max_iter=5, verbose=False)
+
         plt.figure(figsize=(6,4))
-        plt.scatter(E_sel, y, c='r', label='Points')
-        plt.plot(E_sel, slope*E_sel + intercept, 'b--', label=f'fit: T={T_fit:.1f} K,R2={R2:.3f}')
-        plt.plot(label=f'R2: T={R2:.1f} K')
+        plt.scatter(E_used, y_used, c='r', label='Used Points')
+        plt.plot(E_used, slope * E_used + intercept, 'b--',label=f'Fit T={T_fit:.1f} K, R2={R2:.3f}')
         plt.xlabel('E (eV)')
         plt.ylabel('ln(I / (g·A))')
         plt.title(f'{element_name} Boltzmann Plot')
@@ -217,7 +257,7 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int,global_wl,globa
             matched_I = np.array([t[1] for t in matched_exp])  # 实验强度
             # 从理论库中取对应的 A、E、g
             matched_idx = [np.argmin(np.abs(element_wl - wl)) for wl in matched_wl]
-            slope, intercept, T_fit, y, R2 = Boltzmann_fit(matched_I, matched_wl, element_A[matched_idx], element_g[matched_idx], element_E[matched_idx])
+            slope, intercept, T_fit, R2, y  = Boltzmann_fit(matched_I, matched_wl, element_A[matched_idx], element_g[matched_idx], element_E[matched_idx])
             Boltzmann_T[element_name] = T_fit
             Boltzmann_R2[element_name] = R2
         else:
@@ -336,7 +376,7 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int,global_wl,globa
     for elem, distances in final_results.items():
         if distances<10000:
             #elements_confidence[elem]=1/(1+distances) #倒数映射
-            elements_confidence[elem]=np.exp(-1.5*distances) #指数映射
+            elements_confidence[elem]=np.exp(-1.5*distances/final_R2[elem]) #指数映射
             if final_T[elem]<5000 or final_T[elem]>20000: #电子温度判据
                 elements_confidence[elem]=0
         else:
@@ -346,8 +386,7 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int,global_wl,globa
 
 
 #-----主程序-----
-elements,elements_list=elements_database(folder_path)
-
+elements,elements_list=elements_database(folder_path,T)
 signal_path= r'D:\LIBS\ElementDetectation\11.10\SpecSimuDatabase' #待测光谱路径
 I_file_list = glob.glob(os.path.join(signal_path, "*.csv"))
 I_elements_list = [os.path.splitext(os.path.basename(f))[0] for f in I_file_list]
