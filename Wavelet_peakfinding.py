@@ -11,14 +11,14 @@ import pywt
 
 
 
-data=pd.read_csv(r'D:\LIBS\ElementDetectation\11.10\SpecSimuDatabase\Fe100_10000K_PF.csv',header=0,skipinitialspace=True)
+data=pd.read_csv(r'D:\LIBS\ElementDetectation\11.10\Fe-Ni_Spec\Ni100.csv',header=0,skipinitialspace=True)
 data = data.fillna(0).to_numpy()
 data = np.nan_to_num(data, nan=0.0)
 
 x=data[:,0]
 x = np.array([float(str(val).replace('\xa0', '').strip()) for val in x])
 intensity_sum=data[:,1]
-signal=data[:,2]
+signal=data[:,1]
 intensity_ion=data[:,3]
 
 
@@ -217,13 +217,11 @@ ridges_found=find_peaks_ridge(signal,coefficients,neighbor=3,min_length=3,coeffi
 #         peak_ridgefound.append(int(pos_idx))
 # print(peak_ridgefound)
 # true_peak_idx, true_peak_wl, true_peak_int = peak_correction(ridges_found, x, signal, window=5) 
-true_peak_idx, true_peak_wl, true_peak_int = wavelet_peak_detection(signal, x, wavelet='mexh', scales=np.arange(1, 11), 
-                                                                   neighbor=3, min_length=3, coeffi_threshold=100, window=5)
 
 
-
-
-
+# true_peak_idx, true_peak_wl, true_peak_int = wavelet_peak_detection(signal, x, wavelet='mexh', scales=np.arange(1, 11), 
+#                                                                    neighbor=3, min_length=3, coeffi_threshold=100, window=5)
+# print(len(true_peak_wl))
 # #脊线寻峰结果显示
 # fig, (ax1, ax2, ax3) = plt.subplots(3, 1, sharex=True, figsize=(8, 6))
 

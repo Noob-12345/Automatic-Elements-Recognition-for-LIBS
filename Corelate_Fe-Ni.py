@@ -6,78 +6,121 @@ import glob
 from sklearn.linear_model import LinearRegression
 from Wavelet_peakfinding import wavelet_peak_detection
 
+
 def extract_Ni_value(name):
-    # 文件名格式必须是 Ni + 数字
-    # 去掉前两个字符 "Ni"，剩下的数字转 float/int
     try:
-        return float(name[2:])   # 例如 "Ni12" -> "12" -> 12.0
+        return float(name[2:])
     except:
         print(f"警告：无法从文件名解析 Ni 含量：{name}")
         return None
     
-folder_path = r'D:\LIBS\ElementDetectation\11.10\Fe-Ni_Spec' #光谱库路径
+
+# ================================
+# 读取所有文件
+# ================================
+folder_path = r'D:\LIBS\ElementDetectation\11.10\Fe-Ni_Spec'
 file_list = glob.glob(os.path.join(folder_path, "*.csv"))
 elements_list = [os.path.splitext(os.path.basename(f))[0] for f in file_list]
 Ni_contents = [extract_Ni_value(name) for name in elements_list]
 
-all_peaks=[]
-
-for Ni_value,filename in zip(Ni_contents, elements_list):
-    # print(f"Ni含量: {contents[0]}, 文件名: {contents[1]}")
-    file_path = os.path.join(folder_path, filename + ".csv")  
-    # 读取光谱
-    df = pd.read_csv(file_path)
+# 把光谱读入内存
+spectra = {}
+for name in elements_list:
+    df = pd.read_csv(os.path.join(folder_path, name + ".csv"))
     wl = df.iloc[:, 0].values
     intensity = df.iloc[:, 1].values
-
-    # 调用你的寻峰算法
-    peak_idx, peak_wl, peak_int = wavelet_peak_detection(wl, intensity, scales=np.arange(1, 11), neighbor=4, min_length=3, coeffi_threshold=1000, window=5)
-
-    # 收集峰位
-    for pw in peak_wl:
-        all_peaks.append([Ni_value, pw])
+    spectra[name] = (wl, intensity)
 
 
-print(all_peaks[1])
+if "Ni100" not in spectra:
+    raise ValueError("缺少 Ni100.csv")
+
+wl_100, int_100 = spectra["Ni100"]
+
+peak_idx, peak_wl_100, peak_int_100 = wavelet_peak_detection(
+    int_100, wl_100,
+    scales=np.arange(1, 11), neighbor=3,
+    min_length=3, coeffi_threshold=100, window=5
+)
+
+print(f"Ni100 找到 {len(peak_wl_100)} 个基准峰")
+print("峰位：", peak_wl_100)
+
+search_width = 0.07   # 阈值
+
+def find_peak_near(wl_arr, int_arr, target_wl, width=0.1):
+    """在 target_wl ± width 内寻找局部最大强度"""
+    mask = (wl_arr >= target_wl - width) & (wl_arr <= target_wl + width)
+    if not np.any(mask):
+        return None  # 没数据点
+    sub_wl = wl_arr[mask]
+    sub_int = int_arr[mask]
+    idx = np.argmax(sub_int)
+    return sub_int[idx]   # 返回峰强
 
 
-# # 转成 DataFrame
-# peak_df = pd.DataFrame(all_peaks, columns=["Ni", "peak_wl"])
+fit_results = []
 
-# # Step 2：对峰位二维聚类（不同光谱同一条谱线）
-# # 这里用 round(2) 防止少量 shift
-# # =====================================
-# peak_df["peak_group"] = peak_df["peak_wl"].round(2)
+for base_wl in peak_wl_100:
 
-# # =====================================
-# # Step 3：对每组峰位做线性拟合：peak_wl = a * Ni + b
-# # =====================================
-# results = []
+    Ni_vals = []
+    peak_vals = []
 
-# for group, sub in peak_df.groupby("peak_group"):
+    for Ni_value, name in zip(Ni_contents, elements_list):
+        wl, intensity = spectra[name]
 
-#     if len(sub) < 3:
-#         continue    # 样本太少不拟合
+        peak_int = find_peak_near(wl, intensity, base_wl, width=search_width)
 
-#     x = sub["Ni"].values.reshape(-1, 1)
-#     y = sub["peak_wl"].values
+        # 若找不到任何点，则跳过（也可以设为0，看需求）
+        if peak_int is None:
+            continue
 
-#     model = LinearRegression()
-#     model.fit(x, y)
+        Ni_vals.append(Ni_value)
+        peak_vals.append(peak_int)
 
-#     slope = model.coef_[0]
-#     intercept = model.intercept_
-#     r2 = model.score(x, y)
+    # 至少 3 个不同 Ni 才拟合
+    if len(np.unique(Ni_vals)) < 3:
+        continue
 
-#     results.append([group, slope, intercept, r2])
+    X = np.array(Ni_vals).reshape(-1, 1)
+    Y = np.array(peak_vals)
+
+    model = LinearRegression()
+    model.fit(X, Y)
+
+    slope = model.coef_[0]
+    intercept = model.intercept_
+    r2 = model.score(X, Y)
+    count = len(X)
+
+    fit_results.append([base_wl, slope, intercept, r2, count])
+
+    # if base_wl ==303.78:
+    #     # 绘图查看拟合效果
+    #     plt.scatter(X, Y, label="Data Points")
+    #     plt.plot(X, model.predict(X), color='red', label="Fit Line")
+    #     plt.xlabel("Ni Content")
+    #     plt.ylabel("Peak Intensity")
+    #     plt.title(f"Peak at {base_wl} nm: slope={slope:.3f}, R2={r2:.3f}")
+    #     plt.legend()
+    #     plt.show()
 
 
-# # 转成 DataFrame
-# result_df = pd.DataFrame(results, columns=["peak_wl", "slope", "intercept", "R2"])
 
-# # 按 R² 从大到小排序
-# result_df = result_df.sort_values(by="R2", ascending=False)
+# ================================
+# 3. 结果整理并排序
+# ================================
+result_df = pd.DataFrame(
+    fit_results,
+    columns=["peak_wl", "slope", "intercept", "R2", "count"]
+)
 
-# print("======= 与 Ni 含量最相关的峰位 =======")
-# print(result_df.head(20))
+# positive_df = result_df[result_df["slope"] > 0].copy()
+# positive_df["slope_dist_to_1"] = (positive_df["slope"] - 1).abs()
 
+# best_slope_df = positive_df.sort_values("slope_dist_to_1")
+
+# print(best_slope_df.head(40))
+
+bad_lines = result_df[result_df["R2"] < 0.95]
+print(bad_lines)

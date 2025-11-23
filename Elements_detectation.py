@@ -144,14 +144,14 @@ def Boltzmann_plot(matched_i, matched_wl, element_A, element_E, element_g, eleme
         E_sel = np.array(E_sel, dtype=float)
 
         # 玻尔兹曼拟合
-        #slope, intercept, T_fit,R2, y_full = Boltzmann_fit(matched_I, matched_wl,A_sel, g_sel, E_sel)
+        slope, intercept, T_fit,R2, y_full = Boltzmann_fit(matched_I, matched_wl,A_sel, g_sel, E_sel)
         # slope, intercept, T_fit,R2, y_full, y_used = Boltzmann_fit_iterative(matched_I, matched_wl,A_sel, g_sel, E_sel,R2_start_threshold=0.97,max_iter=5,verbose=False)
         # print(f"拟合温度 T = {T_fit:.2f} K, 斜率 = {slope:.3f}")
         
         #绘图
         slope, intercept, T_fit, R2, y_used, E_used, wl_used, I_used, A_used, g_used = \
             Boltzmann_fit_iterative(matched_I, matched_wl, A_sel, g_sel, E_sel,
-                                    R2_start_threshold=0.97, max_iter=5, verbose=False)
+                                    R2_start_threshold=0.1, max_iter=1, verbose=False)
 
         plt.figure(figsize=(6,4))
         plt.scatter(E_used, y_used, c='r', label='Used Points')
@@ -238,7 +238,7 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int,global_wl,globa
             N_total = len(element_wl)
             N_matched = len(matched_exp)
             match_ratio = N_matched / N_total if N_total > 0 else 0 # 匹配率
-            # print(f"{element_name}: 匹配率 = {match_ratio:.2f}, 匹配峰数 = {N_matched}, 总谱线数 = {N_total}")
+            
 
             # 归一化
             if np.sum(theo_vec) > 0:
@@ -258,13 +258,14 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int,global_wl,globa
             # 从理论库中取对应的 A、E、g
             matched_idx = [np.argmin(np.abs(element_wl - wl)) for wl in matched_wl]
             slope, intercept, T_fit, R2, y  = Boltzmann_fit(matched_I, matched_wl, element_A[matched_idx], element_g[matched_idx], element_E[matched_idx])
+            # slope,intecept,T_fit,R2,y,E_iterative,wl_iterative,I_iterative,A_iterative,g_iterative=Boltzmann_fit_iterative(matched_I, matched_wl, element_A[matched_idx], element_g[matched_idx], element_E[matched_idx],R2_start_threshold=0.97, max_iter=3, verbose=False)
             Boltzmann_T[element_name] = T_fit
             Boltzmann_R2[element_name] = R2
         else:
             Boltzmann_T[element_name] = 0
             Boltzmann_R2[element_name] = 0
 
-        if element_name == 'FeI':
+        if element_name == 'CrI':
             plt.figure(figsize=(8,4))
             print(match_ratio)
 
