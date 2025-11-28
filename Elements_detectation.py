@@ -161,7 +161,7 @@ def Boltzmann_plot(matched_i, matched_wl, element_A, element_E, element_g, eleme
         plt.title(f'{element_name} Boltzmann Plot')
         plt.legend()
         plt.grid(True, alpha=0.3)
-        plt.show()
+        
     else:
         print(f"{element_name} 匹配峰数不足，无法绘制玻尔兹曼图。")
 
@@ -258,14 +258,15 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int,global_wl,globa
             # 从理论库中取对应的 A、E、g
             matched_idx = [np.argmin(np.abs(element_wl - wl)) for wl in matched_wl]
             slope, intercept, T_fit, R2, y  = Boltzmann_fit(matched_I, matched_wl, element_A[matched_idx], element_g[matched_idx], element_E[matched_idx])
-            # slope,intecept,T_fit,R2,y,E_iterative,wl_iterative,I_iterative,A_iterative,g_iterative=Boltzmann_fit_iterative(matched_I, matched_wl, element_A[matched_idx], element_g[matched_idx], element_E[matched_idx],R2_start_threshold=0.97, max_iter=3, verbose=False)
+            slope,intecept,T_fit,R2,y,E_iterative,wl_iterative,I_iterative,A_iterative,g_iterative=Boltzmann_fit_iterative(matched_I, matched_wl, element_A[matched_idx], element_g[matched_idx], element_E[matched_idx],R2_start_threshold=0.97, max_iter=3, verbose=False)
+            
             Boltzmann_T[element_name] = T_fit
             Boltzmann_R2[element_name] = R2
         else:
             Boltzmann_T[element_name] = 0
             Boltzmann_R2[element_name] = 0
 
-        if element_name == 'CrI':
+        if element_name == 'FeII':
             plt.figure(figsize=(8,4))
             print(match_ratio)
 
@@ -291,6 +292,7 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int,global_wl,globa
                 matched_exp_norm = matched_exp_intensity / np.sum(matched_exp_intensity)
                 matched_exp_normalized = [(wl, inten_norm_exp)
                           for (wl, _), inten_norm_exp in zip(matched_exp, matched_exp_norm)]
+                
                 for (wl, _), inten_norm_exp in zip(matched_exp, matched_exp_norm):
                     plt.vlines(wl, 0, inten_norm_exp,
                             color='r', alpha=0.7,
@@ -319,6 +321,8 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int,global_wl,globa
             plt.xlabel('Wavelength (nm)')
             plt.ylabel('Normalized Intensity')
             Boltzmann_plot(matched_exp, matched_theo, element_A, element_E, element_g, element_wl,element_name)
+            iterative_combined = np.column_stack((wl_iterative, I_iterative))
+            Boltzmann_plot(iterative_combined, iterative_combined, A_iterative, E_iterative, g_iterative, wl_iterative,element_name+"_iterative")
             plt.show()
 
         match_results[element_name] = O_distance
