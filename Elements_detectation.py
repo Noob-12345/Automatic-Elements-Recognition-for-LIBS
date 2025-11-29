@@ -125,7 +125,7 @@ def Boltzmann_plot(matched_i, matched_wl, element_A, element_E, element_g, eleme
 #参数说明:matched_theo匹配到的理论谱线  matched_exp匹配到的实验谱线  element_A元素的A  element_E元素的E  element_g元素的g  element_wl元素的波长列表  element_name元素名称
 #用途说明：检测匹配点并且绘制玻尔兹曼图
     # ====== ② 玻尔兹曼图计算与绘制 ======
-    if len(matched_wl) >= 2:  # 至少2个点才能线性拟合
+    if len(matched_wl) >= 2:  # 至少3个点才能线性拟合
         print(f"\n--- {element_name} 玻尔兹曼图 ---")
         
         # 提取匹配到的谱线参数（与 matched_exp 对应的理论参数）
@@ -214,7 +214,7 @@ def used_match_spectral_lines(scope):
 
     return theo_vec, exp_vec, matched_theo, matched_exp
         
-#匈牙利算法匹配策略
+#匈牙利算法线匹配策略
 def match_spectral_lines(theo_wl, theo_int, exp_wl, exp_int, scope):
 
     T = len(theo_wl)
@@ -358,6 +358,7 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int,global_wl,globa
         element_g=element_matrix[:,4]
 
         theo_vec, exp_vec, matched_theo, matched_exp = match_spectral_lines_weighted(element_wl, element_intensity, peak_wl, peak_int, scope)
+
         theo_vec = np.array(theo_vec)
         exp_vec = np.array(exp_vec)
         N_total = len(element_wl)
@@ -391,7 +392,7 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int,global_wl,globa
             Boltzmann_T[element_name] = 0
             Boltzmann_R2[element_name] = 0
 
-        if element_name == 'FeI':
+        if element_name == 'MoI':
             plt.figure(figsize=(8,4))
 
         # 全部理论谱线（浅蓝）
@@ -456,8 +457,8 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int,global_wl,globa
         element_distance[base_elem].append(O_distance)
 
 
-#---------------Debug分割线-------------------------
-#元素置信度判断
+#筛选
+#元素距离筛选
     for base_elem, distances in element_distance.items():
         min_distance = min(distances)
         if min_distance < 47.13333:  
@@ -477,7 +478,7 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int,global_wl,globa
                 R2s = element_R2[base_elem]
                 # 遍历 Ts 列表，筛选出有效温度对应的 R²
                 for t, r2 in zip(Ts, R2s):
-                    if t > 0:  # 初筛T>0
+                    if t > 0 and r2!=1:  # 初筛T>0,R2!=1
                         TR_pairs.append((t, r2))
             
             if TR_pairs:
@@ -496,9 +497,6 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int,global_wl,globa
             final_T[base_elem] = 0
             final_R2[base_elem] = 0
 
-    # for base_elem, R2s in element_R2.items():
-    #     max_R2=max(R2s)
-    #     final_R2[base_elem]=max_R2
 
 #反归一化置信度输出
     elements_confidence={}
@@ -519,11 +517,11 @@ elements,elements_list=elements_database(folder_path,T)
 signal_path= r'D:\LIBS\ElementDetectation\11.10\SpecSimuDatabase' #待测光谱路径
 I_file_list = glob.glob(os.path.join(signal_path, "*.csv"))
 I_elements_list = [os.path.splitext(os.path.basename(f))[0] for f in I_file_list]
-target_files=['304_10000K_PF']
+target_files=['312_10000K_PF']
 for I_element_name in I_elements_list:
 
     if I_element_name not in target_files:
-        continue  # 跳过不在名单内的文件
+        continue 
     data=pd.read_csv(os.path.join(signal_path, I_element_name + ".csv"),header=0,skipinitialspace=True)#待测光谱路径
     data = data.fillna(0).to_numpy()
     data = np.nan_to_num(data, nan=0.0)
