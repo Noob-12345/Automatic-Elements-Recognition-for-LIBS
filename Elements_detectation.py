@@ -392,7 +392,7 @@ def compute_element_confidence_shape(elements, peak_wl, peak_int,global_wl,globa
             Boltzmann_T[element_name] = 0
             Boltzmann_R2[element_name] = 0
 
-        if element_name == 'MoI':
+        if element_name == 'CuI':
             plt.figure(figsize=(8,4))
 
         # 全部理论谱线（浅蓝）
@@ -517,7 +517,7 @@ elements,elements_list=elements_database(folder_path,T)
 signal_path= r'D:\LIBS\ElementDetectation\11.10\SpecSimuDatabase' #待测光谱路径
 I_file_list = glob.glob(os.path.join(signal_path, "*.csv"))
 I_elements_list = [os.path.splitext(os.path.basename(f))[0] for f in I_file_list]
-target_files=['312_10000K_PF']
+target_files=['904L_10000K_PF']
 for I_element_name in I_elements_list:
 
     if I_element_name not in target_files:
@@ -532,7 +532,7 @@ for I_element_name in I_elements_list:
     true_peak_idx, peak_wl, peak_int = wavelet_peak_detection(signal,x,wavelet='mexh', scales=np.arange(1, 11), 
                                neighbor=4, min_length=3, coeffi_threshold=1000, window=5)#峰值校正
 
-    particle_result,elements_result,elements_T,elements_R2,elements_confidence=compute_element_confidence_shape(elements, peak_wl, peak_int,x,intensity_sum,scope=0.20)
+    particle_result,elements_result,elements_T,elements_R2,elements_confidence=compute_element_confidence_shape(elements, peak_wl, peak_int,x,intensity_sum,scope=0.15)
     print("\n---" ,I_element_name, "---") 
     # # # 粒子
     # print("--- 粒子层面 ---\n")
